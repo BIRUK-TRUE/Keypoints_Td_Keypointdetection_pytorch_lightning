@@ -1,0 +1,28 @@
+Metadata-Version: 2.4
+Name: keypoint_detection
+Version: 1.0
+Summary: Pytorch Models, Modules etc for keypoint detection
+Home-page: https://github.com/tlpss/keypoint-detection
+Author: Thomas Lips
+Author-email: thomas.lips@ugent.be
+License-File: LICENSE
+Requires-Dist: torch>=0.10
+Requires-Dist: torchvision>=0.11
+Requires-Dist: pytorch-lightning<=1.9.4,>=1.5.10
+Requires-Dist: torchmetrics>=0.7
+Requires-Dist: wandb>=0.13.7
+Requires-Dist: timm>=0.9
+Requires-Dist: tqdm
+Requires-Dist: pytest
+Requires-Dist: pre-commit
+Requires-Dist: scikit-image
+Requires-Dist: albumentations
+Requires-Dist: matplotlib
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: fiftyone
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: summary
