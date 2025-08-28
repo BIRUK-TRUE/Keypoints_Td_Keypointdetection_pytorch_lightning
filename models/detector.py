@@ -167,6 +167,8 @@ class KeypointDetector(pl.LightningModule):
         shared_dict (Dict): a dict with a.o. heatmaps, gt_keypoints and losses
         """
         input_images, keypoint_channels = batch
+        if input_images.shape[0] == 0:
+            return {"loss": torch.tensor(0.0, requires_grad=True).to(input_images.device)}
         heatmap_shape = input_images[0].shape[1:]
 
         gt_heatmaps = [create_heatmap_batch(heatmap_shape, keypoint_channel, self.heatmap_sigma,

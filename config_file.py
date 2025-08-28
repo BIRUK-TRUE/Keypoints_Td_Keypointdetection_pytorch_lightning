@@ -2,22 +2,30 @@
 from typing import List, Tuple
 
 # read training data
-base_path = '../Datasets/ms_coco/corner_keypoints/'
+# Root directory containing the MS COCO dataset. Expected structure:
+#   <base_path>/annotations/person_keypoints_train2017.json
+#   <base_path>/annotations/person_keypoints_val2017.json
+#   <base_path>/images/train2017/train217/*.jpg
+#   <base_path>/images/val2017/val2017/*.jpg
+base_path = '../Datasets/ms_coco'
 
 dataset_type = 'ms_coco'  # ['ms_coco', 'mpii', 'lsp']
 dataset_category = ['train', 'val']
 dataset_phase = ['train2017', 'val2017']  # ['train2017_a', 'val2017_a']
-joints_def = f'{base_path}coco_dataset.json'
-ann_path = base_path + dataset_type + '/annotations/person_keypoints_'
-ann_type = 'person_keypoints'  # f'{base_path}ms_coco/annotations/person_keypoints'
+# COCO official person keypoint annotations
+ann_path = base_path + '/annotations/person_keypoints_'
+ann_type = 'person_keypoints'
+# Default training JSON path
+joints_def = ann_path + dataset_phase[0] + '.json'
 save_model_path = './snapshots/coco/'
 
 all_joints = [[0], [2, 1], [4, 3], [6, 5], [8, 7], [10, 9], [12, 11], [14, 13], [16, 15]]
 all_joints_names = ['nose', 'eye', 'ear', 'shoulder', 'elbow', 'hand', 'hip', 'knee', 'foot']
 pose_joint_person = '_epoch'  # _pose_dist_epoch, _pose_loc_epoch, _person_epoch, or _joint_epoch
-joints_name = ['box_corner0', 'box_corner1', 'box_corner2', 'box_corner3', 'flap_corner0',
-                        'flap_corner1', 'flap_corner2', 'flap_corner3', 'flap_corner4', 'flap_corner5',
-                        'flap_corner6', 'flap_corner7']
+# COCO 17 human keypoints; each sublist defines one detector heatmap channel
+joints_name = ['nose','left_eye','right_eye','left_ear','right_ear','left_shoulder','right_shoulder',
+               'left_elbow', 'right_elbow',  'left_wrist',  'right_wrist',  'left_hip', 'right_hip', 'left_knee',
+                'right_knee','left_ankle','right_ankle']
 # joints_name_relation = [[0, 'nose'], [1, 'left_eye'], [2, 'right_eye'], [3, 'left_ear'], [4, 'right_ear'],
 #                         [5, 'left_shoulder'], [6, 'right_shoulder'], [7, 'left_elbow'], [8, 'right_elbow'],
 #                         [9, 'left_wrist'], [10, 'right_wrist'], [11, 'left_hip'], [12, 'right_hip'], [13, 'left_knee'],

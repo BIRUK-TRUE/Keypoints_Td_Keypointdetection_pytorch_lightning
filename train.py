@@ -69,41 +69,21 @@ def train(model):
 
     # initialize tqdm progress bar
     prog_bar = tqdm.tqdm(train_loader, total=len(train_loader))
-    #
-    for idx, data_smartJoints in enumerate(prog_bar):
-        # if idx == 5:
-        #     break
+    for idx, batch in enumerate(prog_bar):
+        # batch is (images, keypoints) from COCOKeypointsDataset.collate_fn
+        imgs, keypoints = batch
 
-        t_imgs, t_main_joint, t_joints_pairing, t_bboxes = data_smartJoints
-
-        imgs = tuple_of_tensors_to_tensor(t_imgs).to(device)
-        # imgs = torch.as_tensor(image.to(device) for image in t_imgs)
-        main_joint = tuple_of_tensors_to_tensor(t_main_joint).to(device)
-        joints_pairing = tuple_of_tensors_to_tensor(t_joints_pairing).to(device)
-        # bboxes = tuple_of_tensors_to_tensor(t_bboxes).to(device)
-        bboxes = [{k: v.to(device) for k, v in t.items()} for t in t_bboxes]
-
-        # perform a forward pass and calculate the training loss for the three modules
-        main_j_pred, j_pairing_pred, bbox_pred_dict = model(imgs, bboxes)
-
-        # determine the loss of each
-        loss_main_j = criterion_main_joint(main_j_pred, main_joint)
-        loss_joints_pairing = criterion_joints_pairing(j_pairing_pred, joints_pairing)
-        loss_bbox = sum(loss for loss in bbox_pred_dict.values())
-
-        loss_sum = loss_main_j + loss_joints_pairing + loss_bbox
-        loss_value = loss_sum.item()
+        # compute loss via model's shared_step (handles device internally)
+        result = model.shared_step((imgs, keypoints), idx, include_visualization_data_in_result_dict=False)
+        loss = result["loss"]
+        loss_value = float(loss.detach().cpu())
 
         train_loss_hist.send(loss_value)
 
-        # first, zero out any previously accumulated gradients,
         optimizer.zero_grad()
-
-        # then perform backpropagation, and then update model parameters
-        loss_sum.backward()
+        loss.backward()
         optimizer.step()
 
-        # update the loss value beside the progress bar for each iteration
         prog_bar.set_description(desc=f"Loss: {loss_value:.4f}")
 
     return loss_value
@@ -115,51 +95,18 @@ def validate(model):
     # set the models in validation mode
     model.eval()
 
-    # Initialize tqdm progress bar.
     prog_bar = tqdm.tqdm(val_loader, total=len(val_loader))
-    target = []
-    preds = []
-    for jdx, data_smartJoints in enumerate(prog_bar):
-        # if jdx == 3:
-        #     break
-        t_imgs, t_main_joint, t_joints_pairing, t_bboxes = data_smartJoints
+    val_losses = []
+    with torch.no_grad():
+        for jdx, batch in enumerate(prog_bar):
+            imgs, keypoints = batch
+            result = model.shared_step((imgs, keypoints), jdx, include_visualization_data_in_result_dict=False)
+            loss = result["loss"].detach().cpu().item()
+            val_losses.append(loss)
 
-        imgs = tuple_of_tensors_to_tensor(t_imgs).to(device)
-        main_joint = tuple_of_tensors_to_tensor(t_main_joint).to(device)
-        joints_pairing = tuple_of_tensors_to_tensor(t_joints_pairing).to(device)
-        bboxes = [{k: v.to(device) for k, v in t.items()} for t in t_bboxes]
-
-        with torch.no_grad():
-            # perform a forward pass and calculate the training loss for the three modules
-            main_j_pred, j_pairing_pred, bbox_pred_dict = model(imgs, bboxes)
-
-        # For mAP calculation using Torchmetrics.
-        #####################################
-        for idx in range(len(imgs)):
-            true_dict = dict()
-            preds_dict = dict()
-
-            true_dict['main_joint'] = main_joint[idx].detach().cpu()
-            preds_dict['main_joint'] = main_j_pred[idx].detach().cpu()
-
-            true_dict['joints_pairing'] = joints_pairing[idx].detach().cpu()
-            preds_dict['scores'] = j_pairing_pred[idx].detach().cpu()
-
-            true_dict['boxes'] = bboxes[idx]['boxes'].detach().cpu()
-            true_dict['labels'] = bboxes[idx]['labels'].detach().cpu()
-            preds_dict['boxes'] = bbox_pred_dict[idx]['boxes'].detach().cpu()
-            preds_dict['scores'] = bbox_pred_dict[idx]['scores'].detach().cpu()
-            preds_dict['labels'] = bbox_pred_dict[idx]['labels'].detach().cpu()
-
-            preds.append(preds_dict)
-            target.append(true_dict)
-        #####################################
-
-    metric = MeanAveragePrecision()
-    metric.update(preds, target)
-    val_metric_summary = metric.compute()
-
-    return val_metric_summary
+    # return placeholders for mAP keys expected downstream and the mean loss
+    mean_loss = float(np.mean(val_losses)) if len(val_losses) > 0 else 0.0
+    return {"map": 0.0, "map_50": 0.0, "val_loss": mean_loss}
 
 
 if __name__ == '__main__':
@@ -175,11 +122,6 @@ if __name__ == '__main__':
     # THERE IS ERROR CHECK THIS  DON'T FORGET
     train_loader, val_loader = all_dataset.train_val_dataloader()
 
-    # iterator = iter(train_loader)
-    # batch = next(iterator)
-    # print("Original targets:\n", batch[3], "\n\n")
-    # print("Transformed targets:\n", batch[1])
-
     # Learning_parameters. lr = args['learning_rate']
     epochs = args['epochs']
     device = ('cuda' if torch.cuda.is_available() else 'cpu')
@@ -192,9 +134,6 @@ if __name__ == '__main__':
                                 minimal_keypoint_extraction_pixel_distance=1, learning_rate=3e-3,
                                 keypoint_channel_configuration=confs.joints_name, ap_epoch_start=1,
                                 ap_epoch_freq=2, lr_scheduler_relative_threshold=0.0, max_keypoints=20)
-
-    # trainer = create_pl_trainer(args)
-    # trainer.fit(my_model, all_dataset)
 
     early_stopping = RelativeEarlyStopping(monitor="validation/epoch_loss", patience=5, verbose=True, mode="min",
                                            min_relative_delta=float(args["early_stopping_relative_threshold"]), )
@@ -210,15 +149,7 @@ if __name__ == '__main__':
     print(f"{total_trainable_params_1:,} training parameters.")
 
     # initialize loss function and optimizer
-    # optimizer = optim.SGD(model_smartJoints.parameters(), lr=args['learning_rate'])
     optimizer = optim.Adam(my_model.parameters(), lr=confs.init_lr)
-    # optimizer = optim.Adam([{'params': model_smartJoints.parameters()},
-    #                         {'params': model_jointsPairing.parameters(), 'lr': 1e-3}, ], lr=confs.init_lr)
-
-    # Loss function for both main_joint and joints_pairing module
-    criterion_main_joint = nn.CrossEntropyLoss()
-    # criterion = nn.BCEWithLogitsLoss()
-    criterion_joints_pairing = nn.SmoothL1Loss()  # ... or MSELoss
 
     # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=25, T_mult=1, verbose=True)
     # scheduler = MultiStepLR(optimizer=optimizer, milestones=[45], gamma=0.1, verbose=True)
@@ -268,18 +199,6 @@ if __name__ == '__main__':
         train_loss_list.append(train_loss)
         map_50_list.append(metric_summary['map_50'])
         map_list.append(metric_summary['map'])
-
-        # save the best model till now.
-        save_best_model(my_model, float(metric_summary['map']), epoch, 'outputs')
-
-        # Save the current epoch model.
-        save_model(epoch, my_model, optimizer)
-
-        # Save loss plot.
-        save_loss_plot(confs.base_output, train_loss_list)
-
-        # Save mAP plot.
-        save_mAP(confs.base_output, map_50_list, map_list)
         scheduler.step()
 
     print('TRAINING COMPLETE')

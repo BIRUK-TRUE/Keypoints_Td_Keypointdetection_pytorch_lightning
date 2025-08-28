@@ -22,7 +22,7 @@ class KeypointsDataModule(pl.LightningDataModule):
         parser = parent_parser.add_argument_group("KeypointsDatamodule")
         parser.add_argument("--batch_size", required=False, default=16, type=int)
         parser.add_argument("--validation_split_ratio", required=False, default=0.25, type=float)
-        parser.add_argument("--num_workers", required=False, default=4, type=int)
+        parser.add_argument("--num_workers", required=False, default=0, type=int)
         parser.add_argument("--json_dataset_path", type=str, required=True,
             help="Absolute path to the json file that defines the train dataset according to the COCO format.", )
         parser.add_argument("--json_validation_dataset_path", type=str, required=False,
@@ -38,9 +38,10 @@ class KeypointsDataModule(pl.LightningDataModule):
 
         return parent_parser
 
+    # num_workers: int = 2 privious value
     def __init__(self, keypoint_channel_configuration: list[list[str]], json_dataset_path: str = None,
                  json_val_dataset_path: str = None, json_test_dataset_path=None, val_split_ratio: float = 0.25,
-                 batch_size: int = 16, num_workers: int = 2, augment_train: bool = True, **kwargs, ):
+                 batch_size: int = 16, num_workers: int = 0, augment_train: bool = True, **kwargs, ):
         super().__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -65,30 +66,43 @@ class KeypointsDataModule(pl.LightningDataModule):
             self.test_dataset = COCOKeypointsDataset(json_test_dataset_path, keypoint_channel_configuration, **kwargs)
 
         # create the transforms if needed and set them to the datasets
+        img_height, img_width = confs.img_height, confs.img_width
+        base_train_transforms = [alb.Resize(img_height, img_width)]
+        base_val_transforms = [alb.Resize(img_height, img_width)]
+
         if augment_train:
             print("Augmenting the training dataset!")
-            # img_height, img_width = self.train_dataset[0][0].shape[1], self.train_dataset[0][0].shape[2]
-            # img_height, img_width = self.train_dataset.dataset[0][1], self.train_dataset.dataset[0][2]
-            img_height, img_width = confs.img_height, confs.img_width
-            # aspect_ratio = confs.img_max_width / confs.img_max_height
             aspect_ratio = img_width / img_height
-            train_transform = MultiChannelKeypointsCompose([alb.ColorJitter(p=0.8),
-                                                            alb.RandomBrightnessContrast(p=0.8),
-                                                            # alb.RandomResizedCrop(img_height, img_width,
-                                                            #                       scale=(0.8, 1.0),
-                                                            #                       ratio=(0.9 * aspect_ratio,
-                                                            #                              1.1 * aspect_ratio),
-                                                            #                       p=1.0 ),
-                                                            alb.GaussianBlur(p=0.2, blur_limit=(3, 3)),
-                                                            alb.Sharpen(p=0.2),
-                                                            alb.GaussNoise(), ] )
+            train_transform = MultiChannelKeypointsCompose(base_train_transforms + [
+                alb.ColorJitter(p=0.8),
+                alb.RandomBrightnessContrast(p=0.8),
+                alb.GaussianBlur(p=0.2, blur_limit=(3, 3)),
+                alb.Sharpen(p=0.2),
+                alb.GaussNoise(),
+            ])
             if isinstance(self.train_dataset, COCOKeypointsDataset):
                 self.train_dataset.transform = train_transform
             elif isinstance(self.train_dataset, Subset):
-                # if the train dataset is a subset, we need to set the transform to the underlying dataset
-                # otherwise the transform will not be applied..
                 assert isinstance(self.train_dataset.dataset, COCOKeypointsDataset)
                 self.train_dataset.dataset.transform = train_transform
+        else:
+            # Even without augmentation, ensure resizing is applied for consistent tensor shapes
+            resize_only = MultiChannelKeypointsCompose(base_train_transforms)
+            if isinstance(self.train_dataset, COCOKeypointsDataset):
+                self.train_dataset.transform = resize_only
+            elif isinstance(self.train_dataset, Subset):
+                assert isinstance(self.train_dataset.dataset, COCOKeypointsDataset)
+                self.train_dataset.dataset.transform = resize_only
+
+        # Always apply resize to validation/test
+        resize_val = MultiChannelKeypointsCompose(base_val_transforms)
+        if isinstance(self.val_dataset, COCOKeypointsDataset):
+            self.val_dataset.transform = resize_val
+        elif isinstance(self.val_dataset, Subset) and isinstance(self.val_dataset.dataset, COCOKeypointsDataset):
+            self.val_dataset.dataset.transform = resize_val
+
+        if isinstance(self.test_dataset, COCOKeypointsDataset):
+            self.test_dataset.transform = resize_val
 
     @staticmethod
     def _split_dataset(dataset, val_split_ratio):
@@ -101,62 +115,46 @@ class KeypointsDataModule(pl.LightningDataModule):
         return train_dataset, val_dataset
 
     def train_val_dataloader(self):
-        # usually need to seed workers for reproducibility
-        # cf. https://pytorch.org/docs/stable/notes/randomness.html
-        # but PL does for us in their seeding function:
-        # https://lightning.ai/docs/pytorch/stable/common/trainer.html#reproducibility
-
         if self.train_dataset is None:
             return None
 
         train_dataloader = DataLoader(self.train_dataset, self.batch_size, shuffle=True, num_workers=self.num_workers,
                                       collate_fn=COCOKeypointsDataset.collate_fn,
-                                      pin_memory=True, )  # usually a little faster
+                                      pin_memory=False, )
 
         if self.val_dataset is None:
             return None
 
-        val_dataloader = DataLoader(self.val_dataset, self.batch_size, shuffle=False, num_workers=self.num_workers,
-                                    collate_fn=COCOKeypointsDataset.collate_fn, )
+        val_dataloader = DataLoader(self.val_dataset, self.batch_size, shuffle=False, num_workers=self.num_workers,drop_last=False,
+                                    collate_fn=COCOKeypointsDataset.collate_fn, pin_memory=False)
 
         return train_dataloader, val_dataloader
 
     def train_dataloader(self):
-        # usually need to seed workers for reproducibility
-        # cf. https://pytorch.org/docs/stable/notes/randomness.html
-        # but PL does for us in their seeding function:
-        # https://lightning.ai/docs/pytorch/stable/common/trainer.html#reproducibility
-
         if self.train_dataset is None:
             return None
 
         dataloader = DataLoader(self.train_dataset, self.batch_size, shuffle=True, num_workers=self.num_workers,
                                 collate_fn=COCOKeypointsDataset.collate_fn,
-                                pin_memory=True, )  # usually a little faster
+                                pin_memory=False, )
 
         return dataloader
 
     def val_dataloader(self):
-        # usually need to seed workers for reproducibility
-        # cf. https://pytorch.org/docs/stable/notes/randomness.html
-        # but PL does for us in their seeding function:
-        # https://lightning.ai/docs/pytorch/stable/common/trainer.html#reproducibility
-
         if self.val_dataset is None:
             return None
 
         dataloader = DataLoader(self.val_dataset, self.batch_size, shuffle=False, num_workers=self.num_workers,
-                                collate_fn=COCOKeypointsDataset.collate_fn, )
+                                collate_fn=COCOKeypointsDataset.collate_fn, pin_memory=False)
 
         return dataloader
 
     def test_dataloader(self):
-
         if self.test_dataset is None:
             return None
-        dataloader = DataLoader(self.test_dataset, min(4, self.batch_size), # 4 as max for better visualization in wandb
+        dataloader = DataLoader(self.test_dataset, min(4, self.batch_size),
                                 shuffle=False, num_workers=0,
-                                collate_fn=COCOKeypointsDataset.collate_fn, )
+                                collate_fn=COCOKeypointsDataset.collate_fn, pin_memory=False)
 
         return dataloader
 

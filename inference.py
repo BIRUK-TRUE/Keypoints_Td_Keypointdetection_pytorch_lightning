@@ -3,11 +3,14 @@
 import numpy as np
 import torch
 from PIL import Image
+from typing import List, Dict, Any, Optional, Tuple
 
-from keypoint_detection.models.detector import KeypointDetector
-from keypoint_detection.utils.heatmap import get_keypoints_from_heatmap_batch_maxpool
-from keypoint_detection.utils.load_checkpoints import get_model_from_wandb_checkpoint
-from keypoint_detection.utils.visualization import draw_keypoints_on_image
+from models.detector import KeypointDetector
+from utils.heatmap import get_keypoints_from_heatmap_batch_maxpool
+from utils.load_checkpoints import get_model_from_wandb_checkpoint
+from utils.visualization import draw_keypoints_on_image
+from models.person_detector import PersonDetector
+from utils.draw import draw_person_keypoints_and_skeleton
 
 
 def run_inference(model: KeypointDetector, image, confidence_threshold: float = 0.1) -> Image:
@@ -25,6 +28,70 @@ def run_inference(model: KeypointDetector, image, confidence_threshold: float = 
         print(f"Keypoints for {channel_config}: {keypoints}")
     image = draw_keypoints_on_image(image, image_keypoints, model.keypoint_channel_configuration)
     return image
+
+
+def _predict_keypoints_on_crop(model: KeypointDetector, crop: Image, abs_max_threshold: float = 0.1) -> List[Optional[Tuple[int, int]]]:
+    tensored_image = torch.from_numpy(np.array(crop)).float()
+    tensored_image = tensored_image / 255.0
+    tensored_image = tensored_image.permute(2, 0, 1)
+    tensored_image = tensored_image.unsqueeze(0)
+    with torch.no_grad():
+        heatmaps = model(tensored_image)
+    # [batch][channel][kps][(x,y)]
+    nested = get_keypoints_from_heatmap_batch_maxpool(heatmaps, abs_max_threshold=abs_max_threshold)[0]
+    flat: List[Optional[Tuple[int, int]]] = []
+    for channel_kps in nested:
+        if len(channel_kps) > 0:
+            x, y = channel_kps[0]
+            flat.append((int(x), int(y)))
+        else:
+            flat.append(None)
+    return flat
+
+
+def run_multiperson_inference(
+    model: KeypointDetector,
+    image: Image,
+    person_detector: Optional[PersonDetector] = None,
+    person_conf_threshold: float = 0.6,
+    keypoint_abs_threshold: float = 0.1,
+) -> Tuple[Image, List[Dict[str, Any]]]:
+    """
+    Returns a drawn image and structured results list with entries:
+        { person_id, bbox: (x1,y1,x2,y2), keypoints: [(x,y)|None]*C, skeleton: List[(i,j)] }
+    """
+    if person_detector is None:
+        person_detector = PersonDetector("fasterrcnn", person_conf_threshold)
+
+    boxes = person_detector.detect(image)
+    results: List[Dict[str, Any]] = []
+
+    for idx, (x1, y1, x2, y2) in enumerate(boxes):
+        x1c = max(0, min(x1, image.size[0] - 1))
+        y1c = max(0, min(y1, image.size[1] - 1))
+        x2c = max(0, min(x2, image.size[0]))
+        y2c = max(0, min(y2, image.size[1]))
+        if x2c <= x1c or y2c <= y1c:
+            continue
+        crop = image.crop((x1c, y1c, x2c, y2c))
+        crop_kps = _predict_keypoints_on_crop(model, crop, abs_max_threshold=keypoint_abs_threshold)
+        global_kps: List[Optional[Tuple[int, int]]] = []
+        for p in crop_kps:
+            if p is None:
+                global_kps.append(None)
+            else:
+                global_kps.append((p[0] + x1c, p[1] + y1c))
+
+        draw_person_keypoints_and_skeleton(image, global_kps)
+
+        results.append({
+            "person_id": idx,
+            "bbox": (x1c, y1c, x2c, y2c),
+            "keypoints": global_kps,
+            "skeleton": "coco_17",
+        })
+
+    return image, results
 
 
 if __name__ == "__main__":

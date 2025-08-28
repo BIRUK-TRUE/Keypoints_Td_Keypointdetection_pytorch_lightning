@@ -11,11 +11,15 @@ import typing
 from typing import List, Tuple
 import torch
 from torchvision.transforms import ToTensor
+# added this import
+import numpy as np
 
 sys.path.append('../')
 from data.coco_parser import CocoImage, CocoKeypointCategory, CocoKeypoints
 from data.imageloader import ImageDataset, ImageLoader
 from config_file import COCO_KEYPOINT_TYPE, IMG_KEYPOINTS_TYPE
+# added  this import
+import config_file as confs
 
 
 class COCOKeypointsDataset(ImageDataset):
@@ -59,10 +63,16 @@ class COCOKeypointsDataset(ImageDataset):
                  detect_only_visible_keypoints: bool = True, transform: alb.Compose = None,
                  imageloader: ImageLoader = None, **kwargs, ):
         super().__init__(imageloader)
+        # added to track the missed image which is not found in the train2017 folder
+        # Track missing images
+        self.missing_images = 0
+        self.total_images = 0
 
         self.image_to_tensor_transform = ToTensor()
         self.dataset_json_path = Path(json_dataset_path)
-        self.dataset_dir_path = self.dataset_json_path.parent  # assume paths in JSON are relative to this directory!
+        # Since JSON files are in annotations/ and images are in images/, we need to set the base path
+        # to the root COCO directory, not the annotations subdirectory
+        self.dataset_dir_path = self.dataset_json_path.parent.parent  # ../Datasets/ms_coco
 
         self.keypoint_channel_configuration = keypoint_channel_configuration
         self.detect_only_visible_keypoints = detect_only_visible_keypoints
@@ -74,6 +84,15 @@ class COCOKeypointsDataset(ImageDataset):
 
     def __len__(self):
         return len(self.dataset)
+    
+    def get_missing_image_stats(self):
+        """Returns statistics about missing images"""
+        return {
+            'total_images': len(self.dataset),
+            'missing_images': self.missing_images,
+            'available_images': len(self.dataset) - self.missing_images,
+            'missing_percentage': (self.missing_images / len(self.dataset) * 100) if len(self.dataset) > 0 else 0
+        }
 
     def __getitem__(self, index) -> Tuple[torch.Tensor, IMG_KEYPOINTS_TYPE]:
         """
@@ -87,9 +106,88 @@ class COCOKeypointsDataset(ImageDataset):
             index = index.tolist()
         index = int(index)
 
-        image_path = self.dataset_dir_path / self.dataset[index][0]
-        image = self.image_loader.get_image(str(image_path), index)
+        image_rel_path = self.dataset[index][0]
+        # Extract split from the JSON filename to determine which subdirectory to use
+        split_name = None
+        for split in ["train2017", "val2017", "test2017"]:
+            if split in self.dataset_json_path.name:
+                split_name = split
+                break
+        
+        # Try multiple possible paths for your folder structure
+        candidates = []
+        if split_name:
+            # Try different possible structures:
+            candidates.extend([
+                self.dataset_dir_path / "images" / split_name / split_name / image_rel_path,  # images/train2017/train2017/
+                self.dataset_dir_path / "images" / split_name / image_rel_path,              # images/train2017/
+                self.dataset_dir_path / split_name / split_name / image_rel_path,            # train2017/train2017/
+                self.dataset_dir_path / split_name / image_rel_path,                         # train2017/
+            ])
+        else:
+            # Fallback: try images/ directly
+            candidates.append(self.dataset_dir_path / "images" / image_rel_path)
+        
+        # Find the first path that exists
+        image_path = None
+        for candidate in candidates:
+            if candidate.exists():
+                image_path = candidate
+                break
+        
+        # If no path found, use the first candidate and let the error handling deal with it
+        if image_path is None:
+            image_path = candidates[0]
+        
+        # Debug: Print the paths being tried (only for first few images to avoid spam)
+        if index < 5:
+            print(f"Image {index}: Trying paths:")
+            for i, candidate in enumerate(candidates):
+                print(f"  {i}: {candidate} {'yes' if candidate.exists() else 'no'}")
+            print(f"  Selected: {image_path}")
+        
+                # No fallback search - only use the primary path
+        # ------------------------------------------------------------
+        
+        # Check if image exists before trying to load it
+        if not image_path.exists():
+            self.missing_images += 1
+            if self.missing_images <= 10:  # Only print first 10 missing images to avoid spam
+                print(f"Missing image {self.missing_images}: {image_path}")
+            elif self.missing_images == 11:
+                print("... (more missing images will be counted but not displayed)")
+            
+            # Return a placeholder image and keypoints to avoid crashing
+            # This will be filtered out by the dataloader
+            target_height, target_width = 64, 64  # Default from config
+            if hasattr(confs, 'img_height') and hasattr(confs, 'img_width'):
+                target_height, target_width = confs.img_height, confs.img_width
+            placeholder_image = torch.zeros((3, target_height, target_width))
+            placeholder_keypoints = [[] for _ in range(len(self.keypoint_channel_configuration))]
+            return placeholder_image, placeholder_keypoints
+        
+        try:
+            image = self.image_loader.get_image(str(image_path), index)
+        except Exception as e:
+            self.missing_images += 1
+            if self.missing_images <= 10:
+                print(f"Failed to load image {self.missing_images}: {image_path} - Error: {e}")
+            elif self.missing_images == 11:
+                print("... (more failed images will be counted but not displayed)")
+            
+            # Return placeholder on load failure too
+            target_height, target_width = 64, 64  # Default from config
+            if hasattr(confs, 'img_height') and hasattr(confs, 'img_width'):
+                target_height, target_width = confs.img_height, confs.img_width
+            placeholder_image = torch.zeros((3, target_height, target_width))
+            placeholder_keypoints = [[] for _ in range(len(self.keypoint_channel_configuration))]
+            return placeholder_image, placeholder_keypoints
         # remove a-channel if needed
+        # Ensure image has 3 channels (H, W, C)
+        if image.ndim == 2:
+            image = np.stack([image] * 3, axis=-1)
+        elif image.ndim == 3 and image.shape[2] == 1:
+            image = np.repeat(image, 3, axis=2)
         if image.shape[2] == 4:
             image = image[..., :3]
 
@@ -205,6 +303,8 @@ class COCOKeypointsDataset(ImageDataset):
     @staticmethod
     def collate_fn(data):
         """custom collate function for use with the torch dataloader
+        
+        Filters out placeholder images (all zeros) to avoid training on empty data.
 
         Note that it could have been more efficient to padd for each channel separately, but it's not worth the trouble as even
         for 100 channels with each 100 occurances the padded data size is still < 1kB..
@@ -222,10 +322,26 @@ class COCOKeypointsDataset(ImageDataset):
         Note there is no padding, as all values need to be unpacked again in the detector to create all the heatmaps,
         unlike e.g. NLP where you directly feed the padded sequences to the network.
         """
-        images, keypoints = zip(*data)
+        # Filter out placeholder images (all zeros) to avoid training on empty data
+        filtered_data = []
+        for img, kp in data:
+            # Check if image is placeholder (all zeros)
+            if not torch.all(img == 0):
+                filtered_data.append((img, kp))
+        
+        if not filtered_data:
+            # If all images are placeholders, return empty batch
+            target_height, target_width = 64, 64  # Default from config
+            if hasattr(confs, 'img_height') and hasattr(confs, 'img_width'):
+                target_height, target_width = confs.img_height, confs.img_width
+            return torch.empty(0, 3, target_height, target_width), []
+        
+        images, keypoints = zip(*filtered_data)
 
         # convert the list of keypoints to a 2D tensor
-        keypoints = [[torch.tensor(x) for x in y] for y in keypoints]
+        # Use numpy copy to avoid BufferError with memoryview-backed objects
+        import numpy as _np
+        keypoints = [[torch.as_tensor(_np.array(x, dtype=_np.int64).copy()) for x in y] for y in keypoints]
         # reorder to have the different keypoint channels as  first dimension
         # C x N x K x 2 , K = variable number of keypoints for each (N,C)
         reordered_keypoints = [[keypoints[i][j] for i in range(len(keypoints))] for j in range(len(keypoints[0]))]
@@ -233,3 +349,13 @@ class COCOKeypointsDataset(ImageDataset):
         images = torch.stack(images)
 
         return images, reordered_keypoints
+    
+    def print_missing_image_summary(self):
+        """Prints a summary of missing images"""
+        stats = self.get_missing_image_stats()
+        print(f"\n=== Missing Image Summary ===")
+        print(f"Total images in dataset: {stats['total_images']}")
+        print(f"Missing images: {stats['missing_images']}")
+        print(f"Available images: {stats['available_images']}")
+        print(f"Missing percentage: {stats['missing_percentage']:.2f}%")
+        print("==============================\n")

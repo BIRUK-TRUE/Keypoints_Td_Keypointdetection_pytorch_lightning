@@ -13,6 +13,7 @@ class ImageLoader:
         read the image from disk and return as np array
         """
         # load images @runtime from disk
+        # -------------------------------------------------------------------
         image = io.imread(path)
         return image
 
@@ -39,6 +40,7 @@ class IOSafeImageLoaderDecorator(BaseImageLoaderDecorator):
         sleep_time_in_seconds = 1
         for j in range(self.n_io_attempts):
             try:
+                # ----------------------------------------------------------------------
                 image = self.image_loader.get_image(path, idx)
                 return image
             except IOError:
