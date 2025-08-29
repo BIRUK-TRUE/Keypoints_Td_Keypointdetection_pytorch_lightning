@@ -138,10 +138,8 @@ if __name__ == "__main__":
     image_path = "testimages/test1.jpg"
     # image_path = "/home/tlips/Documents/synthetic-cloth-data/synthetic-cloth-data/data/datasets/LEGO-battery/01/images/0.jpg"
     image_size = (256, 256)
-
     image = Image.open(image_path)
     image = image.resize(image_size)
-
     # Load locally saved model (weights & biases)
     model = get_model_from_local_checkpoint(local_checkpoint_path)
     # image = run_inference(model, image)
