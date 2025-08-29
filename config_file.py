@@ -54,8 +54,8 @@ crop = False
 
 # img_size = 480  # 640, 480, 320, 256  224  Image size to resize to in transforms
 img_depth = 3  # 3, 1  the number of channels in the input
-img_width = 64  # 512
-img_height = 64  # 480
+img_width = 256 # 512
+img_height = 256  # 480
 min_input_size = 100
 img_max_width = 640
 img_max_height = 640

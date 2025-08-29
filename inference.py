@@ -73,7 +73,7 @@ def run_inference(model: KeypointDetector, image, confidence_threshold: float = 
     return image
 
 
-def _predict_keypoints_on_crop(model: KeypointDetector, crop: Image, abs_max_threshold: float = 0.1) -> List[Optional[Tuple[int, int]]]:
+def _predict_keypoints_on_crop(model: KeypointDetector, crop: Image, abs_max_threshold: float = 0.25) -> List[Optional[Tuple[int, int]]]:
     tensored_image = torch.from_numpy(np.array(crop)).float()
     tensored_image = tensored_image / 255.0
     tensored_image = tensored_image.permute(2, 0, 1)
@@ -96,8 +96,8 @@ def run_multiperson_inference(
     model: KeypointDetector,
     image: Image,
     person_detector: Optional[PersonDetector] = None,
-    person_conf_threshold: float = 0.6,
-    keypoint_abs_threshold: float = 0.1,
+    person_conf_threshold: float = 0.7,
+    keypoint_abs_threshold: float = 0.25,
 ) -> Tuple[Image, List[Dict[str, Any]]]:
     """
     Returns a drawn image and structured results list with entries:
@@ -116,14 +116,22 @@ def run_multiperson_inference(
         y2c = max(0, min(y2, image.size[1]))
         if x2c <= x1c or y2c <= y1c:
             continue
-        crop = image.crop((x1c, y1c, x2c, y2c))
+        # expand bbox slightly to avoid cutting off extremities
+        expand_ratio = 0.05
+        bw = x2c - x1c
+        bh = y2c - y1c
+        ex1 = max(0, int(x1c - expand_ratio * bw))
+        ey1 = max(0, int(y1c - expand_ratio * bh))
+        ex2 = min(image.size[0], int(x2c + expand_ratio * bw))
+        ey2 = min(image.size[1], int(y2c + expand_ratio * bh))
+        crop = image.crop((ex1, ey1, ex2, ey2))
         crop_kps = _predict_keypoints_on_crop(model, crop, abs_max_threshold=keypoint_abs_threshold)
         global_kps: List[Optional[Tuple[int, int]]] = []
         for p in crop_kps:
             if p is None:
                 global_kps.append(None)
             else:
-                global_kps.append((p[0] + x1c, p[1] + y1c))
+                global_kps.append((p[0] + ex1, p[1] + ey1))
 
         draw_person_keypoints_and_skeleton(image, global_kps)
 

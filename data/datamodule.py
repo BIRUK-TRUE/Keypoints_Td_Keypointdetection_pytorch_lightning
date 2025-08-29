@@ -74,6 +74,7 @@ class KeypointsDataModule(pl.LightningDataModule):
             print("Augmenting the training dataset!")
             aspect_ratio = img_width / img_height
             train_transform = MultiChannelKeypointsCompose(base_train_transforms + [
+                alb.ShiftScaleRotate(shift_limit=0.02, scale_limit=0.2, rotate_limit=20, border_mode=0, p=0.5),
                 alb.ColorJitter(p=0.8),
                 alb.RandomBrightnessContrast(p=0.8),
                 alb.GaussianBlur(p=0.2, blur_limit=(3, 3)),

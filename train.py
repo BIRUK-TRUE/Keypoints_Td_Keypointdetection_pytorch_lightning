@@ -160,7 +160,7 @@ if __name__ == '__main__':
     print(f"Epochs to train for: {epochs}\n")
 
     backbone_model = Unet()
-    my_model = KeypointDetector(heatmap_sigma=2, maximal_gt_keypoint_pixel_distances="2 4", backbone=backbone_model,
+    my_model = KeypointDetector(heatmap_sigma=3, maximal_gt_keypoint_pixel_distances="2 4", backbone=backbone_model,
                                 minimal_keypoint_extraction_pixel_distance=1, learning_rate=3e-3,
                                 keypoint_channel_configuration=confs.joints_name, ap_epoch_start=1,
                                 ap_epoch_freq=2, lr_scheduler_relative_threshold=0.0, max_keypoints=20)
@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
     # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=25, T_mult=1, verbose=True)
     # scheduler = MultiStepLR(optimizer=optimizer, milestones=[45], gamma=0.1, verbose=True)
-    scheduler = MultiStepLR(optimizer=optimizer, milestones=[45], gamma=0.1)
+    scheduler = MultiStepLR(optimizer=optimizer, milestones=[30, 60, 90], gamma=0.1)
 
     # calculate steps per epoch for training and test set
     trainSteps = len(train_loader)
