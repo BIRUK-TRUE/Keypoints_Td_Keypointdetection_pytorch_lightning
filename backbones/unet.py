@@ -7,6 +7,8 @@ import torch.nn as nn
 from backbones.base_backbone import Backbone
 from backbones.s3k import ResNetBlock
 
+import torch.nn.functional as F
+
 
 class MaxPoolDownSamplingBlock(nn.Module):
     def __init__(self, n_channels_in, n_channels_out, kernel_size):
