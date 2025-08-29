@@ -19,7 +19,13 @@ def get_model_from_local_checkpoint(checkpoint_path: str, device: Optional[str] 
     Prefers the serialized model object if present, otherwise constructs a compatible model
     and loads the state_dict.
     """
-    checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
+    # checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
+    checkpoint = torch.load(
+    checkpoint_path,
+    map_location=lambda storage, loc: storage,
+    weights_only=False   #  this makes it work with PyTorch 2.6+
+)
+
 
     if "model" in checkpoint:
         model: KeypointDetector = checkpoint["model"]
