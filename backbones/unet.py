@@ -43,7 +43,15 @@ class UpSamplingBlock(nn.Module):
 
     def forward(self, x, x_skip):
         x = nn.functional.interpolate(x, scale_factor=2)
+        # x = torch.cat([x, x_skip], dim=1)
+        # Ensure same size before concatenation
+        if x.shape[-2:] != x_skip.shape[-2:]:
+            diffY = x_skip.size(2) - x.size(2)
+            diffX = x_skip.size(3) - x.size(3)
+            x = F.pad(x, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
         x = torch.cat([x, x_skip], dim=1)
+
         x = self.conv(x)
         x = self.relu(x)
         x = self.norm(x)
