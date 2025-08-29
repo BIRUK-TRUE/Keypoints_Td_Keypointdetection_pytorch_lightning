@@ -7,7 +7,8 @@ from typing import List, Tuple
 #   <base_path>/annotations/person_keypoints_val2017.json
 #   <base_path>/images/train2017/train217/*.jpg
 #   <base_path>/images/val2017/val2017/*.jpg
-base_path = '../Datasets/ms_coco'
+# base_path = '/Datasets/ms_coco'
+base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
 
 dataset_type = 'ms_coco'  # ['ms_coco', 'mpii', 'lsp']
 dataset_category = ['train', 'val']
@@ -40,7 +41,8 @@ base_output = "snapshots/"  # define the path to the base output directory
 batch_size = 4
 dropout_rate = 0.4
 stride = 8.0
-epochs = 550  # 100
+# epochs = 550  # 100
+epochs = 10  # 100
 init_lr = 0.001  # 0.01, 0.001, 0.0001, 0.0002
 optimizer_name = 'adamw'  # sgd, adam, adamw, rmsprop, sdgard
 # mean_pixel = [123.68, 116.779, 103.939]

@@ -13,6 +13,43 @@ from models.person_detector import PersonDetector
 from utils.draw import draw_person_keypoints_and_skeleton
 
 
+def get_model_from_local_checkpoint(checkpoint_path: str, device: Optional[str] = None) -> KeypointDetector:
+    """
+    Load a model saved locally via utils_file.SaveBestModel/save_model (plain torch.save dict).
+    Prefers the serialized model object if present, otherwise constructs a compatible model
+    and loads the state_dict.
+    """
+    checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
+
+    if "model" in checkpoint:
+        model: KeypointDetector = checkpoint["model"]
+        if "model_state_dict" in checkpoint:
+            model.load_state_dict(checkpoint["model_state_dict"])  # ensure latest weights
+    else:
+        # Fallback: reconstruct the model similarly to train.py defaults
+        from backbones.unet import Unet
+        import config_file as confs
+        backbone = Unet()
+        model = KeypointDetector(
+            heatmap_sigma=2,
+            maximal_gt_keypoint_pixel_distances="2 4",
+            backbone=backbone,
+            minimal_keypoint_extraction_pixel_distance=1,
+            learning_rate=3e-3,
+            keypoint_channel_configuration=confs.joints_name,
+            ap_epoch_start=1,
+            ap_epoch_freq=2,
+            lr_scheduler_relative_threshold=0.0,
+            max_keypoints=20,
+        )
+        model.load_state_dict(checkpoint["model_state_dict"])  # type: ignore[arg-type]
+
+    if device is not None:
+        model.to(device)
+
+    model.eval()
+    return model
+
 def run_inference(model: KeypointDetector, image, confidence_threshold: float = 0.1) -> Image:
     model.eval()
     tensored_image = torch.from_numpy(np.array(image)).float()
@@ -96,13 +133,18 @@ def run_multiperson_inference(
 
 if __name__ == "__main__":
     wandb_checkpoint = "tlips/synthetic-lego-battery-keypoints/model-tbzd50z8:v0"
-    image_path = "/home/tlips/Downloads/Lego-battery-real/0.jpg"
+    # path to locally saved checkpoint produced by SaveBestModel/save_model
+    local_checkpoint_path = "snapshots/SmartJointsBest_resnet34_adamw_0.001.pth"
+    image_path = "testimages/test1.jpg"
     # image_path = "/home/tlips/Documents/synthetic-cloth-data/synthetic-cloth-data/data/datasets/LEGO-battery/01/images/0.jpg"
     image_size = (256, 256)
 
     image = Image.open(image_path)
     image = image.resize(image_size)
 
-    model = get_model_from_wandb_checkpoint(wandb_checkpoint)
-    image = run_inference(model, image)
+    # Load locally saved model (weights & biases)
+    model = get_model_from_local_checkpoint(local_checkpoint_path)
+    # image = run_inference(model, image)
+    image, results = run_multiperson_inference(model, image)
+    print(results)
     image.save("inference_result.png")

@@ -97,16 +97,46 @@ def validate(model):
 
     prog_bar = tqdm.tqdm(val_loader, total=len(val_loader))
     val_losses = []
+    # reset validation AP metrics before accumulation
+    for m in model.ap_validation_metrics:
+        m.reset()
+
     with torch.no_grad():
         for jdx, batch in enumerate(prog_bar):
             imgs, keypoints = batch
-            result = model.shared_step((imgs, keypoints), jdx, include_visualization_data_in_result_dict=False)
+            # include visualization tensors so we can extract predicted heatmaps and gt keypoints for AP
+            result = model.shared_step((imgs, keypoints), jdx, include_visualization_data_in_result_dict=True)
             loss = result["loss"].detach().cpu().item()
             val_losses.append(loss)
 
-    # return placeholders for mAP keys expected downstream and the mean loss
+            # accumulate AP metrics over the validation set
+            model.update_ap_metrics(result, model.ap_validation_metrics)
+
+    # compute mean APs across channels and thresholds
+    # each metric.compute() returns a dict {threshold: ap}
+    per_channel_maps = []
+    per_channel_map50 = []
+    threshold_keys = None
+    for ch_metric in model.ap_validation_metrics:
+        ch_ap_dict = ch_metric.compute()
+        if threshold_keys is None:
+            threshold_keys = list(ch_ap_dict.keys())
+        # mean over thresholds for this channel
+        ch_mean_ap = float(sum(ch_ap_dict.values()) / max(1, len(ch_ap_dict))) if len(ch_ap_dict) > 0 else 0.0
+        per_channel_maps.append(ch_mean_ap)
+        # take the first threshold as the "50" proxy (matches first in maximal_gt_keypoint_pixel_distances)
+        if len(ch_ap_dict) > 0:
+            first_thr_key = threshold_keys[0]
+            per_channel_map50.append(float(ch_ap_dict[first_thr_key]))
+        else:
+            per_channel_map50.append(0.0)
+        ch_metric.reset()
+
     mean_loss = float(np.mean(val_losses)) if len(val_losses) > 0 else 0.0
-    return {"map": 0.0, "map_50": 0.0, "val_loss": mean_loss}
+    # aggregate over channels
+    map_mean = float(np.mean(per_channel_maps)) if len(per_channel_maps) > 0 else 0.0
+    map_50_mean = float(np.mean(per_channel_map50)) if len(per_channel_map50) > 0 else 0.0
+    return {"map": map_mean, "map_50": map_50_mean, "val_loss": mean_loss}
 
 
 if __name__ == '__main__':
@@ -189,6 +219,13 @@ if __name__ == '__main__':
         train_loss = train(my_model)
 
         metric_summary = validate(my_model)
+            # after metric_summary is computed
+        save_best_model(
+            model=my_model,
+            current_valid_map=metric_summary["map"],  # or "map_50" if you prefer
+            epoch=epoch,
+            out_dir=confs.base_output
+        )
 
         print(f"Epoch #{epoch + 1} train loss: {train_loss_hist.value:.3f}")
         print(f"Epoch #{epoch + 1} mAP@0.50:0.95: {metric_summary['map']}")
