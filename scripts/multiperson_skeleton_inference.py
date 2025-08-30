@@ -48,8 +48,8 @@ def main():
     parser.add_argument("image", type=str, help="Path to input image")
     parser.add_argument("--output", type=str, default="multiperson_pose_result.png", help="Output image path")
     parser.add_argument("--detector", type=str, default="fasterrcnn", choices=["fasterrcnn", "retinanet"], help="Detector backbone")
-    parser.add_argument("--det_conf", type=float, default=0.6, help="Person detection confidence threshold")
-    parser.add_argument("--kp_abs_thr", type=float, default=0.1, help="Keypoint absolute max threshold on heatmaps")
+    parser.add_argument("--det_conf", type=float, default=0.3, help="Person detection confidence threshold")
+    parser.add_argument("--kp_abs_thr", type=float, default=0.05, help="Keypoint absolute max threshold on heatmaps")
     parser.add_argument("--wandb_artifact", type=str, required=True, help="Weights & Biases artifact for keypoint model")
     args = parser.parse_args()
 
