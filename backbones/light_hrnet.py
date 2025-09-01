@@ -137,7 +137,7 @@ class LightHRNet(Backbone):
             fuse_layer = []
             for j in range(num_branches):
                 if j > i:
-                    # Downsample from higher resolution to lower resolution
+                    # Upsample from higher resolution to lower resolution
                     fuse_layer.append(nn.Sequential(
                         nn.Conv2d(num_channels[j], num_channels[i], 1, bias=False),
                         nn.BatchNorm2d(num_channels[i]),
@@ -201,7 +201,14 @@ class LightHRNet(Backbone):
             y = y_list[i]
             for j in range(len(y_list)):
                 if i != j and fuse_layers[i][j] is not None:
-                    y = y + fuse_layers[i][j](y_list[j])
+                    fused_feature = fuse_layers[i][j](y_list[j])
+                    # Ensure spatial dimensions match before adding
+                    if fused_feature.shape[2:] != y.shape[2:]:
+                        import torch.nn.functional as F
+                        fused_feature = F.interpolate(
+                            fused_feature, size=y.shape[2:], mode='bilinear', align_corners=False
+                        )
+                    y = y + fused_feature
             x_fuse.append(self.relu(y))
         
         return x_fuse

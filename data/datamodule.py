@@ -91,12 +91,11 @@ class KeypointsDataModule(pl.LightningDataModule):
                 alb.GaussianBlur(blur_limit=(3, 7), p=0.3),
                 alb.MotionBlur(blur_limit=7, p=0.2),
                 alb.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.3),
-                alb.GaussNoise(var_limit=(10.0, 50.0), mean=0, p=0.3),  # Fixed parameter name
+                alb.GaussNoise(var_limit=(10.0, 50.0), p=0.3),  
                 alb.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.2),
-                
-                # Cutout alternatives for regularization (using CoarseDropout only)
-                alb.CoarseDropout(max_holes=8, max_height=32, max_width=32, min_holes=1, 
-                                min_height=8, min_width=8, fill_value=0, p=0.5),
+            
+            # Simplified dropout for Kaggle compatibility
+            alb.CoarseDropout(max_holes=8, max_height=32, max_width=32, p=0.5),
             ])
             if isinstance(self.train_dataset, COCOKeypointsDataset):
                 self.train_dataset.transform = enhanced_transforms
