@@ -8,8 +8,8 @@ from typing import List, Tuple
 #   <base_path>/images/train2017/train217/*.jpg
 #   <base_path>/images/val2017/val2017/*.jpg
 # base_path = '/Datasets/ms_coco'
-base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
-# base_path = '../Datasets/ms_coco'
+# base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
+base_path = '../Datasets/ms_coco'
 
 dataset_type = 'ms_coco'  # ['ms_coco', 'mpii', 'lsp']
 dataset_category = ['train', 'val']
@@ -48,7 +48,7 @@ light_hrnet_blocks = 2
 batch_size = 16
 dropout_rate = 0.4
 stride = 8.0
-epochs = 10  # Reduced from 550 for better efficiency
+epochs = 200  # Reduced from 550 for better efficiency
 # epochs = 5  # 100
 init_lr = 3e-4  # Optimized learning rate
 optimizer_name = 'adamw'  # sgd, adam, adamw, rmsprop, sdgard

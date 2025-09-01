@@ -231,7 +231,7 @@ if __name__ == "__main__":
     wandb_checkpoint = "tlips/synthetic-lego-battery-keypoints/model-tbzd50z8:v0"
     # path to locally saved checkpoint produced by SaveBestModel/save_model
     local_checkpoint_path = "snapshots/SmartJointsBest_LightHRNet_adamw_0.0003.pth"
-    image_path = "testimages/test2.jpg"
+    image_path = "testimages/test1.jpg"
     # image_path = "/home/tlips/Documents/synthetic-cloth-data/synthetic-cloth-data/data/datasets/LEGO-battery/01/images/0.jpg"
     image_size = (256, 256)
     image = Image.open(image_path)
