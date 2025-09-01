@@ -8,8 +8,8 @@ from typing import List, Tuple
 #   <base_path>/images/train2017/train217/*.jpg
 #   <base_path>/images/val2017/val2017/*.jpg
 # base_path = '/Datasets/ms_coco'
-base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
-# base_path = '../Datasets/ms_coco'
+# base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
+base_path = '../Datasets/ms_coco'
 
 dataset_type = 'ms_coco'  # ['ms_coco', 'mpii', 'lsp']
 dataset_category = ['train', 'val']
@@ -39,18 +39,18 @@ num_joints = 17
 model_type = 'LightHRNet'  # LightHRNet, unet, 'resnet18, resnet34, resnet50, resnet101, resnet152, CustomCNN', 'PretrainedResnet'
 base_output = "snapshots/"  # define the path to the base output directory
 
-# Light HRNet backbone configuration
-light_hrnet_channels = 64
+# Light HRNet backbone configuration - Enhanced for better performance
+light_hrnet_channels = 48  # Slightly smaller for better efficiency
 light_hrnet_stages = 2
-light_hrnet_branches = 3
+light_hrnet_branches = 4   # More branches for multi-scale features
 light_hrnet_blocks = 2
 
-batch_size = 4
+batch_size = 16
 dropout_rate = 0.4
 stride = 8.0
-# epochs = 550  # 100
-epochs = 5  # 100
-init_lr = 0.001  # 0.01, 0.001, 0.0001, 0.0002
+epochs = 200  # Reduced from 550 for better efficiency
+# epochs = 5  # 100
+init_lr = 3e-4  # Optimized learning rate
 optimizer_name = 'adamw'  # sgd, adam, adamw, rmsprop, sdgard
 # mean_pixel = [123.68, 116.779, 103.939]
 mean_pixel = [0.485, 0.456, 0.406]

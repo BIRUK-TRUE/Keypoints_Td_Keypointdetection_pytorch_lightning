@@ -135,24 +135,26 @@ class KeypointDetector(pl.LightningModule):
 
     def configure_optimizers(self):
         """
-        Configures an Adam optimizer.
+        Configures an AdamW optimizer with cosine annealing and warmup.
         """
-        self.optimizer = torch.optim.Adam(self.parameters(), self.learning_rate)
+        self.optimizer = torch.optim.AdamW(self.parameters(), self.learning_rate, weight_decay=1e-4)
 
-        # TODO: the LR scheduler can reduce training robustness for smaller datasets (where the val loss might fluctuate more),
-        # this makes the impact of a random seed larger. So for now, we disable it.
-        # solution would be to limit the dependency of the scheduler on the dataset size, e.g. by coupling it to the number of model updates instead of epochs.
-
-        # self.lr_scheduler = ReduceLROnPlateau(
-        #     self.optimizer,
-        #     threshold=self.lr_scheduler_relative_threshold,
-        #     threshold_mode="rel",
-        #     mode="min",
-        #     factor=0.1,
-        #     patience=2,
-        #     verbose=True,
-        # )
-        return {"optimizer": self.optimizer, }
+        # Cosine annealing with warm restarts
+        from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+        self.lr_scheduler = CosineAnnealingWarmRestarts(
+            self.optimizer,
+            T_0=25,
+            T_mult=2,
+            eta_min=1e-6
+        )
+        
+        return {
+            "optimizer": self.optimizer,
+            "lr_scheduler": {
+                "scheduler": self.lr_scheduler,
+                "interval": "epoch"
+            }
+        }
 
     def shared_step(self, batch, batch_idx, include_visualization_data_in_result_dict=False) -> Dict[str, Any]:
         """
@@ -193,11 +195,25 @@ class KeypointDetector(pl.LightningModule):
                 align_corners=False
             ).squeeze(1)
 
-            # Compute BCE loss with logits
-            loss = F.binary_cross_entropy_with_logits(
-                predicted_unnormalized_maps[:, channel_idx, :, :],
-                gt_resized
-            )
+            # Enhanced loss function with focal loss and L1 component
+            pred_channel = predicted_unnormalized_maps[:, channel_idx, :, :]
+            pred_sigmoid = torch.sigmoid(pred_channel)
+            
+            # Focal loss to handle hard examples
+            alpha = 0.25
+            gamma = 2.0
+            ce_loss = F.binary_cross_entropy_with_logits(pred_channel, gt_resized, reduction='none')
+            p_t = pred_sigmoid * gt_resized + (1 - pred_sigmoid) * (1 - gt_resized)
+            alpha_t = alpha * gt_resized + (1 - alpha) * (1 - gt_resized)
+            focal_loss = alpha_t * (1 - p_t) ** gamma * ce_loss
+            focal_loss = focal_loss.mean()
+            
+            # L1 loss for better localization
+            l1_loss = F.l1_loss(pred_sigmoid, gt_resized)
+            
+            # Combined loss with adaptive weighting
+            loss = focal_loss + 0.1 * l1_loss
+            
             channel_losses.append(loss)
             with torch.no_grad():
                 channel_gt_losses.append(BCE_loss(gt_heatmaps[channel_idx], gt_heatmaps[channel_idx]))

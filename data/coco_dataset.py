@@ -157,14 +157,21 @@ class COCOKeypointsDataset(ImageDataset):
             elif self.missing_images == 11:
                 print("... (more missing images will be counted but not displayed)")
             
-            # Return a placeholder image and keypoints to avoid crashing
-            # This will be filtered out by the dataloader
-            target_height, target_width = 64, 64  # Default from config
-            if hasattr(confs, 'img_height') and hasattr(confs, 'img_width'):
-                target_height, target_width = confs.img_height, confs.img_width
-            placeholder_image = torch.zeros((3, target_height, target_width))
-            placeholder_keypoints = [[] for _ in range(len(self.keypoint_channel_configuration))]
-            return placeholder_image, placeholder_keypoints
+            # Skip missing images entirely instead of using placeholders
+            # Find next valid image in dataset
+            for next_idx in range(index + 1, len(self.dataset)):
+                try:
+                    return self.__getitem__(next_idx)
+                except:
+                    continue
+            # If no valid images found after current index, try from beginning
+            for next_idx in range(0, index):
+                try:
+                    return self.__getitem__(next_idx)
+                except:
+                    continue
+            # If still no valid image found, raise error
+            raise RuntimeError(f"No valid images found in dataset. Check your dataset path and structure.")
         
         try:
             image = self.image_loader.get_image(str(image_path), index)
@@ -175,13 +182,21 @@ class COCOKeypointsDataset(ImageDataset):
             elif self.missing_images == 11:
                 print("... (more failed images will be counted but not displayed)")
             
-            # Return placeholder on load failure too
-            target_height, target_width = 64, 64  # Default from config
-            if hasattr(confs, 'img_height') and hasattr(confs, 'img_width'):
-                target_height, target_width = confs.img_height, confs.img_width
-            placeholder_image = torch.zeros((3, target_height, target_width))
-            placeholder_keypoints = [[] for _ in range(len(self.keypoint_channel_configuration))]
-            return placeholder_image, placeholder_keypoints
+            # Skip failed images entirely instead of using placeholders
+            # Find next valid image in dataset
+            for next_idx in range(index + 1, len(self.dataset)):
+                try:
+                    return self.__getitem__(next_idx)
+                except:
+                    continue
+            # If no valid images found after current index, try from beginning
+            for next_idx in range(0, index):
+                try:
+                    return self.__getitem__(next_idx)
+                except:
+                    continue
+            # If still no valid image found, raise error
+            raise RuntimeError(f"No valid images found in dataset. Check your dataset path and structure.")
         # remove a-channel if needed
         # Ensure image has 3 channels (H, W, C)
         if image.ndim == 2:
@@ -304,7 +319,7 @@ class COCOKeypointsDataset(ImageDataset):
     def collate_fn(data):
         """custom collate function for use with the torch dataloader
         
-        Filters out placeholder images (all zeros) to avoid training on empty data.
+        Since we now skip missing images entirely, no need to filter placeholders.
 
         Note that it could have been more efficient to padd for each channel separately, but it's not worth the trouble as even
         for 100 channels with each 100 occurances the padded data size is still < 1kB..
@@ -322,21 +337,8 @@ class COCOKeypointsDataset(ImageDataset):
         Note there is no padding, as all values need to be unpacked again in the detector to create all the heatmaps,
         unlike e.g. NLP where you directly feed the padded sequences to the network.
         """
-        # Filter out placeholder images (all zeros) to avoid training on empty data
-        filtered_data = []
-        for img, kp in data:
-            # Check if image is placeholder (all zeros)
-            if not torch.all(img == 0):
-                filtered_data.append((img, kp))
-        
-        if not filtered_data:
-            # If all images are placeholders, return empty batch
-            target_height, target_width = 64, 64  # Default from config
-            if hasattr(confs, 'img_height') and hasattr(confs, 'img_width'):
-                target_height, target_width = confs.img_height, confs.img_width
-            return torch.empty(0, 3, target_height, target_width), []
-        
-        images, keypoints = zip(*filtered_data)
+        # No need to filter since we skip missing images entirely
+        images, keypoints = zip(*data)
 
         # convert the list of keypoints to a 2D tensor
         # Use numpy copy to avoid BufferError with memoryview-backed objects

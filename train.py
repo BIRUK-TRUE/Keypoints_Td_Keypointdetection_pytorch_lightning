@@ -82,6 +82,10 @@ def train(model):
 
         optimizer.zero_grad()
         loss.backward()
+        
+        # Gradient clipping for stability
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
 
         prog_bar.set_description(desc=f"Loss: {loss_value:.4f}")
@@ -162,8 +166,8 @@ if __name__ == '__main__':
     # Create Light HRNet backbone with configuration from config_file.py
     backbone_model = LightHRNet(n_channels=confs.light_hrnet_channels, num_stages=confs.light_hrnet_stages, num_branches=confs.light_hrnet_branches, num_blocks=confs.light_hrnet_blocks)
     print(f"Using Light HRNet backbone: {confs.light_hrnet_channels} channels, {confs.light_hrnet_stages} stages, {confs.light_hrnet_branches} branches, {confs.light_hrnet_blocks} blocks")
-    my_model = KeypointDetector(heatmap_sigma=3, maximal_gt_keypoint_pixel_distances="2 4", backbone=backbone_model,
-                                minimal_keypoint_extraction_pixel_distance=1, learning_rate=3e-3,
+    my_model = KeypointDetector(heatmap_sigma=6, maximal_gt_keypoint_pixel_distances="2 4", backbone=backbone_model,
+                                minimal_keypoint_extraction_pixel_distance=2, learning_rate=3e-4,
                                 keypoint_channel_configuration=confs.joints_name, ap_epoch_start=1,
                                 ap_epoch_freq=2, lr_scheduler_relative_threshold=0.0, max_keypoints=20)
 
@@ -180,12 +184,11 @@ if __name__ == '__main__':
     total_trainable_params_1 = sum(p.numel() for p in my_model.parameters() if p.requires_grad)
     print(f"{total_trainable_params_1:,} training parameters.")
 
-    # initialize loss function and optimizer
-    optimizer = optim.Adam(my_model.parameters(), lr=confs.init_lr)
+    # Enhanced optimizer and scheduler with warmup and cosine annealing
+    optimizer = optim.AdamW(my_model.parameters(), lr=confs.init_lr, weight_decay=1e-4)
 
-    # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=25, T_mult=1, verbose=True)
-    # scheduler = MultiStepLR(optimizer=optimizer, milestones=[45], gamma=0.1, verbose=True)
-    scheduler = MultiStepLR(optimizer=optimizer, milestones=[30, 60, 90], gamma=0.1)
+    # Cosine annealing with warm restarts for better convergence
+    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=25, T_mult=2, eta_min=1e-6, verbose=True)
 
     # calculate steps per epoch for training and test set
     trainSteps = len(train_loader)

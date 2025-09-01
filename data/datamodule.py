@@ -74,12 +74,30 @@ class KeypointsDataModule(pl.LightningDataModule):
             print("Augmenting the training dataset!")
             aspect_ratio = img_width / img_height
             train_transform = MultiChannelKeypointsCompose(base_train_transforms + [
-                alb.ShiftScaleRotate(shift_limit=0.02, scale_limit=0.2, rotate_limit=20, border_mode=0, p=0.5),
-                alb.ColorJitter(p=0.8),
-                alb.RandomBrightnessContrast(p=0.8),
-                alb.GaussianBlur(p=0.2, blur_limit=(3, 3)),
-                alb.Sharpen(p=0.2),
-                alb.GaussNoise(),
+                # Enhanced geometric augmentations
+                alb.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.3, rotate_limit=30, border_mode=0, p=0.7),
+                alb.HorizontalFlip(p=0.5),
+                alb.Perspective(scale=(0.05, 0.1), p=0.3),
+                alb.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=0.2),
+                
+                # Enhanced color augmentations
+                alb.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.8),
+                alb.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=0.8),
+                alb.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.6),
+                alb.RandomGamma(gamma_limit=(80, 120), p=0.4),
+                alb.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.3),
+                
+                # Noise and blur augmentations
+                alb.GaussianBlur(blur_limit=(3, 7), p=0.3),
+                alb.MotionBlur(blur_limit=7, p=0.2),
+                alb.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.3),
+                alb.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+                alb.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.2),
+                
+                # Cutout for regularization
+                alb.Cutout(num_holes=8, max_h_size=16, max_w_size=16, fill_value=0, p=0.5),
+                alb.CoarseDropout(max_holes=8, max_height=32, max_width=32, min_holes=1, 
+                                min_height=8, min_width=8, fill_value=0, p=0.3),
             ])
             if isinstance(self.train_dataset, COCOKeypointsDataset):
                 self.train_dataset.transform = train_transform

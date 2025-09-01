@@ -39,7 +39,7 @@ class BasicBlock(nn.Module):
 
 
 class LightHRNet(Backbone):
-    """Light HRNet backbone for keypoint detection"""
+    """Light HRNet backbone for keypoint detection with proper cross-scale feature exchange"""
 
     def __init__(self, n_channels_in=3, n_channels=32, num_stages=2, num_branches=2,
                  num_blocks=2, num_channels=None, **kwargs):
@@ -49,9 +49,10 @@ class LightHRNet(Backbone):
         self.num_branches = num_branches
         self.num_blocks = num_blocks
 
-        # Set default channel configuration if not provided
+        # Set progressive channel configuration if not provided
         if num_channels is None:
-            self.num_channels = [n_channels] * num_branches
+            # Standard HRNet progressive channel scaling: [C, 2C, 4C, ...]
+            self.num_channels = [n_channels * (2**i) for i in range(num_branches)]
         else:
             self.num_channels = num_channels
 
@@ -63,20 +64,19 @@ class LightHRNet(Backbone):
         # First stage - single branch
         self.layer1 = self._make_layer(BasicBlock, n_channels, n_channels, num_blocks)
 
-        # Multi-scale stages - create transition from single branch to multi-branch
+        # Multi-scale stages with proper feature exchange
         self.transition1 = self._make_transition_layer([n_channels], self.num_channels)
         self.stage2 = self._make_stage(self.num_channels, num_blocks)
+        self.fuse_layers2 = self._make_fuse_layers(num_branches, self.num_channels)
 
         if num_stages > 2:
-            # For 3+ stages, double the channels
-            next_channels = [c * 2 for c in self.num_channels]
-            self.transition2 = self._make_transition_layer(self.num_channels, next_channels)
-            self.stage3 = self._make_stage(next_channels, num_blocks)
-            self.num_channels = next_channels  # update channels for later fusion
+            # For 3+ stages, maintain the same channel structure
+            self.transition2 = self._make_transition_layer(self.num_channels, self.num_channels)
+            self.stage3 = self._make_stage(self.num_channels, num_blocks)
+            self.fuse_layers3 = self._make_fuse_layers(num_branches, self.num_channels)
 
-        # Final fusion layer - sum all branch channels
-        total_channels = sum(self.num_channels)
-        self.final_layer = nn.Conv2d(total_channels, n_channels, kernel_size=1)
+        # Final fusion layer - properly fuse all scales
+        self.final_layer = self._make_final_layer()
 
     def _make_layer(self, block, inplanes, planes, blocks, stride=1):
         downsample = None
@@ -127,12 +127,84 @@ class LightHRNet(Backbone):
             blocks.append(self._make_layer(BasicBlock, num_channels[i], num_channels[i], num_blocks))
         return nn.ModuleList(blocks)
 
+    def _make_fuse_layers(self, num_branches, num_channels):
+        """Create fusion layers for cross-scale feature exchange"""
+        if num_branches == 1:
+            return None
+
+        fuse_layers = []
+        for i in range(num_branches):
+            fuse_layer = []
+            for j in range(num_branches):
+                if j > i:
+                    # Downsample from higher resolution to lower resolution
+                    fuse_layer.append(nn.Sequential(
+                        nn.Conv2d(num_channels[j], num_channels[i], 1, bias=False),
+                        nn.BatchNorm2d(num_channels[i]),
+                        nn.Upsample(scale_factor=2**(j-i), mode='nearest')
+                    ))
+                elif j == i:
+                    fuse_layer.append(None)
+                else:
+                    # Upsample from lower resolution to higher resolution
+                    conv3x3s = []
+                    for k in range(i-j):
+                        if k == i - j - 1:
+                            num_outchannels_conv3x3 = num_channels[i]
+                            conv3x3s.append(nn.Sequential(
+                                nn.Conv2d(num_channels[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
+                                nn.BatchNorm2d(num_outchannels_conv3x3)
+                            ))
+                        else:
+                            num_outchannels_conv3x3 = num_channels[j]
+                            conv3x3s.append(nn.Sequential(
+                                nn.Conv2d(num_channels[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
+                                nn.BatchNorm2d(num_outchannels_conv3x3),
+                                nn.ReLU(inplace=True)
+                            ))
+                    fuse_layer.append(nn.Sequential(*conv3x3s))
+            fuse_layers.append(nn.ModuleList(fuse_layer))
+
+        return nn.ModuleList(fuse_layers)
+
+    def _make_final_layer(self):
+        """Create final fusion layer that properly combines all scales"""
+        # Upsample all branches to highest resolution and sum
+        return nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(self.num_channels[i], self.n_channels, 1, bias=False),
+                nn.BatchNorm2d(self.n_channels),
+                nn.ReLU(inplace=True)
+            ) for i in range(self.num_branches)
+        ])
+
     def forward_stage(self, stage, x_list):
-        """Forward pass for a stage (ModuleList of branches)"""
+        """Forward pass for a stage (ModuleList of branches) without fusion"""
         y_list = []
         for i, branch in enumerate(stage):
             y_list.append(branch(x_list[i]))
         return y_list
+
+    def forward_stage_with_fusion(self, stage, fuse_layers, x_list):
+        """Forward pass for a stage with cross-scale feature exchange"""
+        # First process each branch independently
+        y_list = []
+        for i, branch in enumerate(stage):
+            y_list.append(branch(x_list[i]))
+        
+        # Then fuse features across scales if fusion layers exist
+        if fuse_layers is None:
+            return y_list
+        
+        x_fuse = []
+        for i in range(len(y_list)):
+            y = y_list[i]
+            for j in range(len(y_list)):
+                if i != j and fuse_layers[i][j] is not None:
+                    y = y + fuse_layers[i][j](y_list[j])
+            x_fuse.append(self.relu(y))
+        
+        return x_fuse
 
     def forward(self, x):
         # Initial convolution
@@ -151,8 +223,8 @@ class LightHRNet(Backbone):
             else:
                 x_list.append(x)
 
-        # Second stage
-        y_list = self.forward_stage(self.stage2, x_list)
+        # Second stage with feature fusion
+        y_list = self.forward_stage_with_fusion(self.stage2, self.fuse_layers2, x_list)
 
         # If more than 2 stages
         if self.num_stages > 2:
@@ -164,24 +236,34 @@ class LightHRNet(Backbone):
                     else:
                         x_list.append(self.transition2[i](y_list[-1]))
                 else:
-                    x_list.append(y_list[i])
-            y_list = self.forward_stage(self.stage3, x_list)
+                    if i < len(y_list):
+                        x_list.append(y_list[i])
+                    else:
+                        x_list.append(y_list[-1])
+            y_list = self.forward_stage_with_fusion(self.stage3, self.fuse_layers3, x_list)
 
-        # Fuse multi-scale features
-        x_fuse = []
+        # Final fusion: upsample all branches to highest resolution and sum
+        x_final = None
         for i in range(len(y_list)):
-            if i == 0:
-                x_fuse.append(y_list[i])
+            # Process each branch through final layer
+            branch_out = self.final_layer[i](y_list[i])
+            
+            # Upsample to match the highest resolution (first branch)
+            if i > 0:
+                branch_out = F.interpolate(
+                    branch_out, 
+                    size=y_list[0].shape[2:], 
+                    mode='bilinear', 
+                    align_corners=False
+                )
+            
+            # Sum all branches
+            if x_final is None:
+                x_final = branch_out
             else:
-                # Upsample to match the first branch
-                y = F.interpolate(y_list[i], size=y_list[0].shape[2:], mode='bilinear', align_corners=False)
-                x_fuse.append(y)
+                x_final = x_final + branch_out
 
-        # Concatenate and fuse
-        x = torch.cat(x_fuse, dim=1)
-        x = self.final_layer(x)
-
-        return x
+        return x_final
 
     def get_n_channels_out(self):
         return self.n_channels
