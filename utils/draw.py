@@ -31,3 +31,49 @@ def draw_person_keypoints_and_skeleton(
             draw.ellipse((x - r, y - r, x + r, y + r), fill=(255, 0, 0))
 
 
+def draw_person_bounding_box(
+    image: Image.Image,
+    bbox: Tuple[int, int, int, int],
+    person_id: int,
+    color=(255, 255, 0),  # Yellow by default
+    width: int = 3
+) -> None:
+    """Draw a bounding box around a detected person with person ID label.
+    
+    Args:
+        image: PIL Image to draw on
+        bbox: Bounding box coordinates (x1, y1, x2, y2)
+        person_id: ID number of the person
+        color: RGB color tuple for the bounding box
+        width: Width of the bounding box lines
+    """
+    draw = ImageDraw.Draw(image)
+    x1, y1, x2, y2 = bbox
+    
+    # Draw the bounding box rectangle
+    draw.rectangle([x1, y1, x2, y2], outline=color, width=width)
+    
+    # Draw person ID label
+    label = f"Person {person_id}"
+    # Get text size for background rectangle
+    try:
+        # Try to get text bbox (newer Pillow versions)
+        text_bbox = draw.textbbox((0, 0), label)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+    except AttributeError:
+        # Fallback for older Pillow versions
+        text_width, text_height = draw.textsize(label)
+    
+    # Draw background rectangle for text
+    label_y = max(0, y1 - text_height - 5)
+    draw.rectangle(
+        [x1, label_y, x1 + text_width + 10, label_y + text_height + 5],
+        fill=color,
+        outline=color
+    )
+    
+    # Draw the text
+    draw.text((x1 + 5, label_y + 2), label, fill=(0, 0, 0))
+
+
