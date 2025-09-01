@@ -6,6 +6,7 @@ sys.path.append('../')
 from backbones.base_backbone import Backbone
 from backbones.convnext_unet import ConvNeXtUnet
 from backbones.dilated_cnn import DilatedCnn
+from backbones.light_hrnet import LightHRNet
 from backbones.maxvit_unet import MaxVitPicoUnet, MaxVitUnet
 from backbones.mobilenetv3 import MobileNetV3
 from backbones.s3k import S3K
@@ -22,6 +23,7 @@ class BackboneFactory:
         S3K,
         DilatedCnn,
         MobileNetV3,
+        LightHRNet,
     ]
 
     @staticmethod

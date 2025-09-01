@@ -35,8 +35,14 @@ joints_name = ['nose','left_eye','right_eye','left_ear','right_ear','left_should
 # Classes: 0 index is reserved for background
 bbox_class = ['__background__', 'person']
 num_joints = 17
-model_type = 'resnet34'  # unet, 'resnet18, resnet34, resnet50, resnet101, resnet152, CustomCNN', 'PretrainedResnet'
+model_type = 'LightHRNet'  # LightHRNet, unet, 'resnet18, resnet34, resnet50, resnet101, resnet152, CustomCNN', 'PretrainedResnet'
 base_output = "snapshots/"  # define the path to the base output directory
+
+# Light HRNet backbone configuration
+light_hrnet_channels = 64
+light_hrnet_stages = 2
+light_hrnet_branches = 3
+light_hrnet_blocks = 2
 
 batch_size = 4
 dropout_rate = 0.4

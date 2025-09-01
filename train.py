@@ -21,7 +21,7 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import tqdm
 # from tqdm.auto import tqdm
 
-from backbones.unet import Unet
+from backbones.light_hrnet import LightHRNet
 import config_file as confs
 from data import datamodule, coco_dataset, coco_parser
 from models.detector import KeypointDetector
@@ -159,7 +159,9 @@ if __name__ == '__main__':
     print(f"Learning rate: {args['learning_rate']}")
     print(f"Epochs to train for: {epochs}\n")
 
-    backbone_model = Unet()
+    # Create Light HRNet backbone with configuration from config_file.py
+    backbone_model = LightHRNet(n_channels=confs.light_hrnet_channels, num_stages=confs.light_hrnet_stages, num_branches=confs.light_hrnet_branches, num_blocks=confs.light_hrnet_blocks)
+    print(f"Using Light HRNet backbone: {confs.light_hrnet_channels} channels, {confs.light_hrnet_stages} stages, {confs.light_hrnet_branches} branches, {confs.light_hrnet_blocks} blocks")
     my_model = KeypointDetector(heatmap_sigma=3, maximal_gt_keypoint_pixel_distances="2 4", backbone=backbone_model,
                                 minimal_keypoint_extraction_pixel_distance=1, learning_rate=3e-3,
                                 keypoint_channel_configuration=confs.joints_name, ap_epoch_start=1,
