@@ -46,7 +46,7 @@ Output (n_channels, H/2, W/2)
 python train.py --backbone_type LightHRNet \
                 --n_channels 64 \
                 --num_stages 2 \
-                --num_branches 3 \
+                --num_branches 2 \
                 --num_blocks 2
 ```
 
@@ -62,7 +62,7 @@ backbone = BackboneFactory.create_backbone(
     n_channels_in=3,
     n_channels=64,
     num_stages=2,
-    num_branches=3,
+    num_branches=2,
     num_blocks=2
 )
 
@@ -81,7 +81,7 @@ The default Light HRNet configuration is already set in `config_file.py`:
 # Light HRNet backbone configuration
 light_hrnet_channels = 64
 light_hrnet_stages = 2
-light_hrnet_branches = 3
+light_hrnet_branches = 2  # Reduced from 3 to 2 for better stability
 light_hrnet_blocks = 2
 ```
 
@@ -155,9 +155,11 @@ See `examples/light_hrnet_config.py` for complete configuration examples and usa
 
 ### Common Issues
 
-1. **Out of Memory**: Reduce `n_channels` or `num_branches`
-2. **Slow Training**: Reduce `num_stages` or `num_blocks`
-3. **Low Accuracy**: Increase `n_channels` or `num_stages`
+1. **IndexError: index out of range**: This was a bug in the original implementation that has been fixed. The current version properly handles transition layers between stages.
+
+2. **Out of Memory**: Reduce `n_channels` or `num_branches`
+3. **Slow Training**: Reduce `num_stages` or `num_blocks`
+4. **Low Accuracy**: Increase `n_channels` or `num_stages`
 
 ### Performance Tips
 

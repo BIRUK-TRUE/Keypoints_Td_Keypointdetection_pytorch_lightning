@@ -42,13 +42,18 @@ class LightHRNet(Backbone):
     """Light HRNet backbone for keypoint detection"""
     
     def __init__(self, n_channels_in=3, n_channels=32, num_stages=2, num_branches=2, 
-                 num_blocks=2, num_channels=[32, 64], **kwargs):
+                 num_blocks=2, num_channels=None, **kwargs):
         super().__init__()
         self.n_channels = n_channels
         self.num_stages = num_stages
         self.num_branches = num_branches
         self.num_blocks = num_blocks
-        self.num_channels = num_channels
+        
+        # Set default channel configuration if not provided
+        if num_channels is None:
+            self.num_channels = [n_channels] * num_branches
+        else:
+            self.num_channels = num_channels
         
         # Initial convolution
         self.conv1 = nn.Conv2d(n_channels_in, n_channels, kernel_size=3, stride=2, padding=1, bias=False)
@@ -58,16 +63,19 @@ class LightHRNet(Backbone):
         # First stage - single branch
         self.layer1 = self._make_layer(BasicBlock, n_channels, n_channels, num_blocks)
         
-        # Multi-scale stages
-        self.transition1 = self._make_transition_layer([n_channels], num_channels)
-        self.stage2 = self._make_stage(num_channels, num_blocks)
+        # Multi-scale stages - create transition from single branch to multi-branch
+        self.transition1 = self._make_transition_layer([n_channels], self.num_channels)
+        self.stage2 = self._make_stage(self.num_channels, num_blocks)
         
         if num_stages > 2:
-            self.transition2 = self._make_transition_layer(num_channels, [c*2 for c in num_channels])
-            self.stage3 = self._make_stage([c*2 for c in num_channels], num_blocks)
+            # For 3+ stages, double the channels
+            next_channels = [c * 2 for c in self.num_channels]
+            self.transition2 = self._make_transition_layer(self.num_channels, next_channels)
+            self.stage3 = self._make_stage(next_channels, num_blocks)
         
-        # Final fusion layer
-        self.final_layer = nn.Conv2d(sum(num_channels), n_channels, kernel_size=1)
+        # Final fusion layer - sum all branch channels
+        total_channels = sum(self.num_channels)
+        self.final_layer = nn.Conv2d(total_channels, n_channels, kernel_size=1)
         
     def _make_layer(self, block, inplanes, planes, blocks, stride=1):
         downsample = None
@@ -85,12 +93,14 @@ class LightHRNet(Backbone):
         return nn.Sequential(*layers)
     
     def _make_transition_layer(self, num_channels_pre_layer, num_channels_cur_layer):
+        """Create transition layers between stages with different numbers of branches"""
         num_branches_cur = len(num_channels_cur_layer)
         num_branches_pre = len(num_channels_pre_layer)
         
         transition_layers = []
         for i in range(num_branches_cur):
             if i < num_branches_pre:
+                # Existing branch - check if channel change is needed
                 if num_channels_cur_layer[i] != num_channels_pre_layer[i]:
                     transition_layers.append(nn.Sequential(
                         nn.Conv2d(num_channels_pre_layer[i], num_channels_cur_layer[i], 3, 1, 1, bias=False),
@@ -99,18 +109,17 @@ class LightHRNet(Backbone):
                 else:
                     transition_layers.append(None)
             else:
-                conv3x3s = []
-                for j in range(i+1-num_branches_pre):
-                    inchannels = num_channels_pre_layer[-1]
-                    conv3x3s.append(nn.Sequential(
-                        nn.Conv2d(inchannels, num_channels_cur_layer[i], 3, 2, 1, bias=False),
-                        nn.BatchNorm2d(num_channels_cur_layer[i]),
-                        nn.ReLU(inplace=True)))
-                transition_layers.append(nn.Sequential(*conv3x3s))
+                # New branch - create from the last existing branch
+                inchannels = num_channels_pre_layer[-1]
+                transition_layers.append(nn.Sequential(
+                    nn.Conv2d(inchannels, num_channels_cur_layer[i], 3, 2, 1, bias=False),
+                    nn.BatchNorm2d(num_channels_cur_layer[i]),
+                    nn.ReLU(inplace=True)))
         
         return nn.ModuleList(transition_layers)
     
     def _make_stage(self, num_channels, num_blocks):
+        """Create a stage with multiple branches"""
         num_branches = len(num_channels)
         blocks = []
         for i in range(num_branches):
@@ -129,7 +138,7 @@ class LightHRNet(Backbone):
         # Transition to multi-scale
         x_list = []
         for i in range(self.num_branches):
-            if self.transition1[i] is not None:
+            if i < len(self.transition1) and self.transition1[i] is not None:
                 x_list.append(self.transition1[i](x))
             else:
                 x_list.append(x)

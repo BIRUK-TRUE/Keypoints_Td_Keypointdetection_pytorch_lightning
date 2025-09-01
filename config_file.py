@@ -41,7 +41,7 @@ base_output = "snapshots/"  # define the path to the base output directory
 # Light HRNet backbone configuration
 light_hrnet_channels = 64
 light_hrnet_stages = 2
-light_hrnet_branches = 3
+light_hrnet_branches = 2  # Reduced from 3 to 2 for better stability
 light_hrnet_blocks = 2
 
 batch_size = 4
