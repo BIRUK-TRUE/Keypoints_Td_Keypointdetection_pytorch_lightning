@@ -196,7 +196,7 @@ class KeypointDetector(pl.LightningModule):
             # Compute BCE loss with logits
             loss = F.binary_cross_entropy_with_logits(
                 predicted_unnormalized_maps[:, channel_idx, :, :],
-                gt_resized[:, channel_idx, :, :]
+                gt_resized
             )
             channel_losses.append(loss)
             with torch.no_grad():
