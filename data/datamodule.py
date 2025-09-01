@@ -73,12 +73,12 @@ class KeypointsDataModule(pl.LightningDataModule):
         if augment_train:
             print("Augmenting the training dataset!")
             aspect_ratio = img_width / img_height
-            train_transform = MultiChannelKeypointsCompose(base_train_transforms + [
-                # Enhanced geometric augmentations
-                alb.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.3, rotate_limit=30, border_mode=0, p=0.7),
+            enhanced_transforms = MultiChannelKeypointsCompose(base_train_transforms + [
+                # Enhanced geometric augmentations (using Affine instead of ShiftScaleRotate)
+                alb.Affine(scale=(0.7, 1.3), translate_percent=(-0.1, 0.1), rotate=(-30, 30), p=0.7),
                 alb.HorizontalFlip(p=0.5),
                 alb.Perspective(scale=(0.05, 0.1), p=0.3),
-                alb.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=0.2),
+                alb.ElasticTransform(alpha=1, sigma=50, p=0.2),  # Removed alpha_affine parameter
                 
                 # Enhanced color augmentations
                 alb.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.8),
@@ -87,23 +87,22 @@ class KeypointsDataModule(pl.LightningDataModule):
                 alb.RandomGamma(gamma_limit=(80, 120), p=0.4),
                 alb.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.3),
                 
-                # Noise and blur augmentations
+                # Noise and blur augmentations (fixed parameter names)
                 alb.GaussianBlur(blur_limit=(3, 7), p=0.3),
                 alb.MotionBlur(blur_limit=7, p=0.2),
                 alb.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.3),
-                alb.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+                alb.GaussNoise(var_limit=(10.0, 50.0), mean=0, p=0.3),  # Fixed parameter name
                 alb.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.2),
                 
-                # Cutout for regularization
-                alb.Cutout(num_holes=8, max_h_size=16, max_w_size=16, fill_value=0, p=0.5),
+                # Cutout alternatives for regularization (using CoarseDropout only)
                 alb.CoarseDropout(max_holes=8, max_height=32, max_width=32, min_holes=1, 
-                                min_height=8, min_width=8, fill_value=0, p=0.3),
+                                min_height=8, min_width=8, fill_value=0, p=0.5),
             ])
             if isinstance(self.train_dataset, COCOKeypointsDataset):
-                self.train_dataset.transform = train_transform
+                self.train_dataset.transform = enhanced_transforms
             elif isinstance(self.train_dataset, Subset):
                 assert isinstance(self.train_dataset.dataset, COCOKeypointsDataset)
-                self.train_dataset.dataset.transform = train_transform
+                self.train_dataset.dataset.transform = enhanced_transforms
         else:
             # Even without augmentation, ensure resizing is applied for consistent tensor shapes
             resize_only = MultiChannelKeypointsCompose(base_train_transforms)
