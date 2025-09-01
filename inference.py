@@ -76,11 +76,13 @@ def run_inference(model: KeypointDetector, image, confidence_threshold: float = 
 def _predict_keypoints_on_crop(model: KeypointDetector, crop: Image, abs_max_threshold: float = 0.25) -> List[Optional[Tuple[int, int]]]:
     tensored_image = torch.from_numpy(np.array(crop)).float()
     tensored_image = tensored_image / 255.0
+    # Change HWC -> CHW before normalization
+    tensored_image = tensored_image.permute(2, 0, 1)
     # Apply ImageNet normalization to match training
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
     tensored_image = (tensored_image - mean) / std
-    tensored_image = tensored_image.permute(2, 0, 1)
+    # tensored_image = tensored_image.permute(2, 0, 1)
     tensored_image = tensored_image.unsqueeze(0)
     with torch.no_grad():
         heatmaps = model(tensored_image)
