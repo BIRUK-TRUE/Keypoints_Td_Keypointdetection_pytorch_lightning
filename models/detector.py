@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 # import wandb  # 085a9352d0151990a786ca9a9cff3f93cd5dbf13    use this API key from your profile
 # wandb.login()
 # wandb.require("legacy-service")
@@ -184,11 +185,20 @@ class KeypointDetector(pl.LightningModule):
 
         result_dict = {}
         for channel_idx in range(len(self.keypoint_channel_configuration)):
-            channel_losses.append(
-                # combines sigmoid with BCE for increased stability.
-                nn.functional.binary_cross_entropy_with_logits(predicted_unnormalized_maps[:, channel_idx, :, :],
-                                                               gt_heatmaps[channel_idx])
+            # Resize GT heatmap to match predicted map size
+            gt_resized = F.interpolate(
+                gt_heatmaps[channel_idx].unsqueeze(1).float(),  # add channel dim
+                size=predicted_unnormalized_maps.shape[2:],    # match H, W
+                mode="bilinear",
+                align_corners=False
+            ).squeeze(1)
+
+            # Compute BCE loss with logits
+            loss = F.binary_cross_entropy_with_logits(
+                predicted_unnormalized_maps[:, channel_idx, :, :],
+                gt_resized[:, channel_idx, :, :]
             )
+            channel_losses.append(loss)
             with torch.no_grad():
                 channel_gt_losses.append(BCE_loss(gt_heatmaps[channel_idx], gt_heatmaps[channel_idx]))
 
