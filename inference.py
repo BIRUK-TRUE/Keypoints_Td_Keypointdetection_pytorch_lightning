@@ -228,31 +228,47 @@ def run_multiperson_inference(
 
 
 if __name__ == "__main__":
-    wandb_checkpoint = "tlips/synthetic-lego-battery-keypoints/model-tbzd50z8:v0"
-    # path to locally saved checkpoint produced by SaveBestModel/save_model
-    local_checkpoint_path = "snapshots/SmartJointsBest_LightHRNet_adamw_0.0003.pth"
-    image_path = "testimages/test1.jpg"
-    # image_path = "/home/tlips/Documents/synthetic-cloth-data/synthetic-cloth-data/data/datasets/LEGO-battery/01/images/0.jpg"
-    image_size = (256, 256)
-    image = Image.open(image_path)
-    image = image.resize(image_size)
-    # Load locally saved model (weights & biases)
-    model = get_model_from_local_checkpoint(local_checkpoint_path)
-    # Option 1: Single person inference with bounding box
-    # image = run_inference(model, image, draw_bbox=True)
-    # image.save("inference_result_single.png")
+    import argparse
+    parser = argparse.ArgumentParser(description="Run keypoint detection inference on an image.")
+    parser.add_argument("--image", type=str, required=True, help="Path to the input image.")
+    parser.add_argument("--checkpoint", type=str, required=True, help="Path to the model checkpoint file (.pth).")
+    parser.add_argument("--output", type=str, default="inference_result.png", help="Path to save the output image.")
+    parser.add_argument("--mode", type=str, choices=["single", "multi"], default="multi", help="Inference mode: 'single' for single-person, 'multi' for multi-person detection.")
+    parser.add_argument("--img-size", type=int, default=256, help="Size to which the image will be resized (width and height).")
+    parser.add_argument("--person-threshold", type=float, default=0.7, help="Confidence threshold for person detection in multi-person mode.")
+    parser.add_argument("--keypoint-threshold", type=float, default=0.2, help="Confidence threshold for keypoint detection.")
+
+    args = parser.parse_args()
+
+    image_size = (args.img_size, args.img_size)
+    image = Image.open(args.image).convert("RGB")
     
-    # Option 2: Multi-person inference with bounding boxes (default)
-    image, results = run_multiperson_inference(
-        model, 
-        image, 
-        bbox_color=(255, 255, 0),  # Yellow bounding boxes
-        bbox_width=3
-    )
-    print("Detection Results:")
-    for result in results:
-        print(f"  Person {result['person_id']}: bbox={result['bbox']}, keypoints_detected={sum(1 for kp in result['keypoints'] if kp is not None)}")
-    
-    image.save("inference_result_with_bboxes.png")
-    print("Result saved as 'inference_result_with_bboxes.png'")
-    print(f"Detected {len(results)} person(s) in the image")
+    # Load the model from the local checkpoint
+    print(f"Loading model from {args.checkpoint}...")
+    model = get_model_from_local_checkpoint(args.checkpoint)
+    print("Model loaded successfully.")
+
+    if args.mode == 'single':
+        print("Running in single-person inference mode...")
+        image = image.resize(image_size)
+        image = run_inference(model, image, confidence_threshold=args.keypoint_threshold, draw_bbox=True)
+        print(f"Detected keypoints saved to {args.output}")
+
+    else: # multi-person mode
+        print("Running in multi-person inference mode...")
+        # Note: multi-person inference does not resize the whole image, but crops detections.
+        image, results = run_multiperson_inference(
+            model,
+            image,
+            person_conf_threshold=args.person_threshold,
+            keypoint_abs_threshold=args.keypoint_threshold,
+            bbox_color=(255, 255, 0),  # Yellow
+            bbox_width=3
+        )
+        print("\nDetection Results:")
+        for result in results:
+            print(f"  Person {result['person_id']}: bbox={result['bbox']}, keypoints_detected={sum(1 for kp in result['keypoints'] if kp is not None)}")
+        print(f"\nDetected {len(results)} person(s) in the image.")
+
+    image.save(args.output)
+    print(f"Result saved to '{args.output}'")

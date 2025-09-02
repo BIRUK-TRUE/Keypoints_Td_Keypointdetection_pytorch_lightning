@@ -50,16 +50,25 @@ class SaveBestModel:
     def __init__(self, best_valid_map=float(0)):
         self.best_valid_map = best_valid_map
 
-    def __call__(self, model, current_valid_map, epoch, out_dir, ):
+    def __call__(self, model, current_valid_map, epoch, out_dir, optimizer=None, scheduler=None):
         if current_valid_map > self.best_valid_map:
             self.best_valid_map = current_valid_map
             print(f"\nBEST VALIDATION mAP: {self.best_valid_map}")
             print(f"\nSAVING BEST MODEL FOR EPOCH: {epoch + 1}\n")
-            torch.save({'epoch': epoch + 1,
-                        'model_state_dict': model.state_dict(),
-                        # 'optimizer_state_dict': optimizer.state_dict(),
-                        'model': model, },
-                       f'{confs.base_output + model_name_best}.pth')
+            
+            checkpoint = {
+                'epoch': epoch + 1,
+                'model_state_dict': model.state_dict(),
+                'best_valid_map': self.best_valid_map,
+                'model': model,
+            }
+            
+            if optimizer is not None:
+                checkpoint['optimizer_state_dict'] = optimizer.state_dict()
+            if scheduler is not None:
+                checkpoint['scheduler_state_dict'] = scheduler.state_dict()
+                
+            torch.save(checkpoint, f'{confs.base_output + model_name_best}.pth')
 
 
 def save_model(epochs, model, optimizer):
@@ -71,6 +80,51 @@ def save_model(epochs, model, optimizer):
                 'model': model, },
                confs.base_output + model_name + '.pth')
     # torch.save(model, confs.base_output + model_name + '.pth')
+
+
+def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None):
+    """
+    Load a checkpoint and restore model, optimizer, and scheduler states.
+    
+    Args:
+        checkpoint_path (str): Path to the checkpoint file
+        model: The model to load state into
+        optimizer: The optimizer to load state into (optional)
+        scheduler: The scheduler to load state into (optional)
+    
+    Returns:
+        dict: Dictionary containing loaded checkpoint information
+    """
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+    
+    print(f"Loading checkpoint from: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    
+    # Load model state
+    model.load_state_dict(checkpoint['model_state_dict'])
+    print(f"Model state loaded from epoch {checkpoint['epoch']}")
+    
+    # Load optimizer state if available and provided
+    if optimizer is not None and 'optimizer_state_dict' in checkpoint:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        print("Optimizer state loaded")
+    
+    # Load scheduler state if available and provided
+    if scheduler is not None and 'scheduler_state_dict' in checkpoint:
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        print("Scheduler state loaded")
+    
+    # Get best validation mAP if available
+    best_valid_map = checkpoint.get('best_valid_map', 0.0)
+    
+    return {
+        'epoch': checkpoint['epoch'],
+        'best_valid_map': best_valid_map,
+        'model_loaded': True,
+        'optimizer_loaded': optimizer is not None and 'optimizer_state_dict' in checkpoint,
+        'scheduler_loaded': scheduler is not None and 'scheduler_state_dict' in checkpoint
+    }
 
 
 def save_loss_plot(train_loss_list, x_label='iterations', y_label='train loss', save_name='train_loss'):

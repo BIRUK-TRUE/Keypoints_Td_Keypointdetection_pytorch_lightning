@@ -26,7 +26,7 @@ import config_file as confs
 from data import datamodule, coco_dataset, coco_parser
 from models.detector import KeypointDetector
 from train_utils import RelativeEarlyStopping, ModelCheckpoint
-from utils_file import Averager, SaveBestModel, save_model, save_loss_plot, save_mAP
+from utils_file import Averager, SaveBestModel, save_model, save_loss_plot, save_mAP, load_checkpoint
 
 plt.ion()   # This is the interactive mode
 
@@ -55,6 +55,8 @@ parser.add_argument("--non-deterministic-pytorch", action="store_false", dest="d
 
 parser.add_argument("--wandb_checkpoint_artifact", type=str, required=False,
                     help="A checkpoint to resume/start training from. keep in mind that you currently cannot specify hyperparameters other than the LR.", )
+parser.add_argument("--resume_checkpoint", type=str, required=False,
+                    help="Path to checkpoint file to resume training from. Should be a .pth file saved by SaveBestModel.", )
 args = vars(parser.parse_args())
 
 def tuple_of_tensors_to_tensor(tuple_of_tensors):
@@ -188,8 +190,9 @@ if __name__ == '__main__':
     optimizer = optim.AdamW(my_model.parameters(), lr=confs.init_lr, weight_decay=1e-4)
 
     # Cosine annealing with warm restarts for better convergence
-    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=25, T_mult=2, eta_min=1e-6, verbose=True)
-
+    # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=25, T_mult=2, eta_min=1e-6, verbose=True)
+    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=25, T_mult=2, eta_min=1e-6)
+    #
     # calculate steps per epoch for training and test set
     trainSteps = len(train_loader)
     valSteps = len(val_loader)
@@ -208,11 +211,32 @@ if __name__ == '__main__':
 
     # To save best model.
     save_best_model = SaveBestModel()
+    
+    # Variables for resuming training
+    start_epoch = 0
+    
+    # Load checkpoint if specified
+    if args.get('resume_checkpoint'):
+        try:
+            checkpoint_info = load_checkpoint(
+                args['resume_checkpoint'], 
+                my_model, 
+                optimizer, 
+                scheduler
+            )
+            start_epoch = checkpoint_info['epoch']
+            save_best_model.best_valid_map = checkpoint_info['best_valid_map']
+            print(f"Resuming training from epoch {start_epoch}")
+            print(f"Best validation mAP so far: {save_best_model.best_valid_map:.4f}")
+        except Exception as e:
+            print(f"Error loading checkpoint: {e}")
+            print("Starting training from scratch...")
+            start_epoch = 0
 
     # loop over epochs
     print("[INFO] training the network...")
     startTime = time.time()
-    for epoch in range(confs.epochs):
+    for epoch in range(start_epoch, confs.epochs):
         print(f"\nEpoch {epoch + 1} of {confs.epochs}")
 
         # Reset the training loss histories for the current epoch.
@@ -229,7 +253,9 @@ if __name__ == '__main__':
             model=my_model,
             current_valid_map=metric_summary["map"],  # or "map_50" if you prefer
             epoch=epoch,
-            out_dir=confs.base_output
+            out_dir=confs.base_output,
+            optimizer=optimizer,
+            scheduler=scheduler
         )
 
         print(f"Epoch #{epoch + 1} train loss: {train_loss_hist.value:.3f}")

@@ -22,7 +22,7 @@ class KeypointsDataModule(pl.LightningDataModule):
         parser = parent_parser.add_argument_group("KeypointsDatamodule")
         parser.add_argument("--batch_size", required=False, default=16, type=int)
         parser.add_argument("--validation_split_ratio", required=False, default=0.25, type=float)
-        parser.add_argument("--num_workers", required=False, default=0, type=int)
+        parser.add_argument("--num_workers", required=False, default=4, type=int)
         parser.add_argument("--json_dataset_path", type=str, required=True,
             help="Absolute path to the json file that defines the train dataset according to the COCO format.", )
         parser.add_argument("--json_validation_dataset_path", type=str, required=False,
@@ -41,7 +41,7 @@ class KeypointsDataModule(pl.LightningDataModule):
     # num_workers: int = 2 privious value
     def __init__(self, keypoint_channel_configuration: list[list[str]], json_dataset_path: str = None,
                  json_val_dataset_path: str = None, json_test_dataset_path=None, val_split_ratio: float = 0.25,
-                 batch_size: int = 16, num_workers: int = 0, augment_train: bool = True, **kwargs, ):
+                 batch_size: int = 16, num_workers: int = 8, augment_train: bool = True, **kwargs, ):
         super().__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -137,13 +137,13 @@ class KeypointsDataModule(pl.LightningDataModule):
 
         train_dataloader = DataLoader(self.train_dataset, self.batch_size, shuffle=True, num_workers=self.num_workers,
                                       collate_fn=COCOKeypointsDataset.collate_fn,
-                                      pin_memory=False, )
+                                      pin_memory=False, persistent_workers=True)
 
         if self.val_dataset is None:
             return None
 
         val_dataloader = DataLoader(self.val_dataset, self.batch_size, shuffle=False, num_workers=self.num_workers,drop_last=False,
-                                    collate_fn=COCOKeypointsDataset.collate_fn, pin_memory=False)
+                                    collate_fn=COCOKeypointsDataset.collate_fn, pin_memory=False, persistent_workers=True)
 
         return train_dataloader, val_dataloader
 
