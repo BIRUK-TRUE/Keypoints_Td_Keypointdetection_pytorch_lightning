@@ -263,7 +263,7 @@ if __name__ == "__main__":
             person_conf_threshold=args.person_threshold,
             keypoint_abs_threshold=args.keypoint_threshold,
             bbox_color=(255, 255, 0),  # Yellow
-            bbox_width=3
+            bbox_width=5
         )
         print("\nDetection Results:")
         for result in results:

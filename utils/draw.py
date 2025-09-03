@@ -23,12 +23,13 @@ def draw_person_keypoints_and_skeleton(
     for i, j in COCO_SKELETON:
         if i < len(keypoints) and j < len(keypoints):
             if keypoints[i] is not None and keypoints[j] is not None:
-                draw.line([keypoints[i], keypoints[j]], fill=color, width=2)
+                draw.line([keypoints[i], keypoints[j]], fill=color, width=4)
     for p in keypoints:
         if p is not None:
             x, y = p
-            r = 3
-            draw.ellipse((x - r, y - r, x + r, y + r), fill=(255, 0, 0))
+            # r = 6
+            r=12
+            draw.ellipse((x - r, y - r, x + r, y + r), fill=(0, 0, 255))
 
 
 def draw_person_bounding_box(
