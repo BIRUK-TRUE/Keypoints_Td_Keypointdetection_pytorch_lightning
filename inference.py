@@ -237,7 +237,7 @@ if __name__ == "__main__":
     parser.add_argument("--img-size", type=int, default=256, help="Size to which the image will be resized (width and height).")
     parser.add_argument("--person-threshold", type=float, default=0.7, help="Confidence threshold for person detection in multi-person mode.")
     parser.add_argument("--keypoint-threshold", type=float, default=0.2, help="Confidence threshold for keypoint detection.")
-
+# 
     args = parser.parse_args()
 
     image_size = (args.img_size, args.img_size)
