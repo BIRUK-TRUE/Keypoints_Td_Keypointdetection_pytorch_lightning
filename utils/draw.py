@@ -28,8 +28,8 @@ def draw_person_keypoints_and_skeleton(
         if p is not None:
             x, y = p
             # r = 6
-            r=12
-            draw.ellipse((x - r, y - r, x + r, y + r), fill=(0, 0, 255))
+            r=8
+            draw.ellipse((x - r, y - r, x + r, y + r), fill=(255, 0, 0))
 
 
 def draw_person_bounding_box(
