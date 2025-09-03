@@ -8,8 +8,8 @@ from typing import List, Tuple
 #   <base_path>/images/train2017/train217/*.jpg
 #   <base_path>/images/val2017/val2017/*.jpg
 # base_path = '/Datasets/ms_coco'
-# base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
-base_path = '../Datasets/ms_coco'
+base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
+# base_path = '../Datasets/ms_coco'
 
 dataset_type = 'ms_coco'  # ['ms_coco', 'mpii', 'lsp']
 dataset_category = ['train', 'val']
