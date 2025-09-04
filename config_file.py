@@ -20,7 +20,7 @@ ann_type = 'person_keypoints'
 # Default training JSON path
 joints_def = ann_path + dataset_phase[0] + '.json'
 save_model_path = './snapshots/coco/'
-
+# 
 all_joints = [[0], [2, 1], [4, 3], [6, 5], [8, 7], [10, 9], [12, 11], [14, 13], [16, 15]]
 all_joints_names = ['nose', 'eye', 'ear', 'shoulder', 'elbow', 'hand', 'hip', 'knee', 'foot']
 pose_joint_person = '_epoch'  # _pose_dist_epoch, _pose_loc_epoch, _person_epoch, or _joint_epoch
