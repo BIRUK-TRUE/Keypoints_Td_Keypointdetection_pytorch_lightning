@@ -170,10 +170,11 @@ class LightHRNet(Backbone):
     def _make_final_layer(self):
         """Create final fusion layer that properly combines all scales"""
         # Upsample all branches to highest resolution and sum
+        # Output 17 channels for the 17 keypoints
         return nn.ModuleList([
             nn.Sequential(
-                nn.Conv2d(self.num_channels[i], self.n_channels, 1, bias=False),
-                nn.BatchNorm2d(self.n_channels),
+                nn.Conv2d(self.num_channels[i], 17, 1, bias=False),
+                nn.BatchNorm2d(17),
                 nn.ReLU(inplace=True)
             ) for i in range(self.num_branches)
         ])
@@ -273,7 +274,8 @@ class LightHRNet(Backbone):
         return x_final
 
     def get_n_channels_out(self):
-        return self.n_channels
+        # Return the number of keypoints (17) to match the expected output channels
+        return 17
 
     @staticmethod
     def add_to_argparse(parent_parser: argparse.ArgumentParser) -> argparse.ArgumentParser:

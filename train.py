@@ -177,10 +177,13 @@ if __name__ == '__main__':
 
     backbone_model = BackboneFactory.create_backbone(confs.model_type, confs, **backbone_params)
     print(f"Using {confs.model_type} backbone.")
-    my_model = KeypointDetector(heatmap_sigma=6, maximal_gt_keypoint_pixel_distances="2 4", backbone=backbone_model,
-                                minimal_keypoint_extraction_pixel_distance=2, learning_rate=3e-4,
-                                keypoint_channel_configuration=confs.joints_name, ap_epoch_start=1,
-                                ap_epoch_freq=2, lr_scheduler_relative_threshold=0.0, max_keypoints=20)
+    # Create proper keypoint channel configuration - each keypoint gets its own channel
+    keypoint_channel_configuration = [[joint] for joint in confs.joints_name]
+    
+    my_model = KeypointDetector(heatmap_sigma=2, maximal_gt_keypoint_pixel_distances="2 4 8", backbone=backbone_model,
+                                minimal_keypoint_extraction_pixel_distance=1, learning_rate=confs.init_lr,
+                                keypoint_channel_configuration=keypoint_channel_configuration, ap_epoch_start=1,
+                                ap_epoch_freq=2, lr_scheduler_relative_threshold=0.0, max_keypoints=50)
 
     early_stopping = RelativeEarlyStopping(monitor="validation/epoch_loss", patience=5, verbose=True, mode="min",
                                            min_relative_delta=float(args["early_stopping_relative_threshold"]), )

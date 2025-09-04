@@ -60,7 +60,7 @@ class COCOKeypointsDataset(ImageDataset):
         return parent_parser
 
     def __init__(self, json_dataset_path: str, keypoint_channel_configuration: list[list[str]],
-                 detect_only_visible_keypoints: bool = True, transform: alb.Compose = None,
+                 detect_only_visible_keypoints: bool = False, transform: alb.Compose = None,
                  imageloader: ImageLoader = None, **kwargs, ):
         super().__init__(imageloader)
         # added to track the missed image which is not found in the train2017 folder

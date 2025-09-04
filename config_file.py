@@ -46,12 +46,11 @@ light_hrnet_stages = 2
 light_hrnet_branches = 4   # More branches for multi-scale features
 light_hrnet_blocks = 2
 
-batch_size = 16
-dropout_rate = 0.4
-stride = 8.0
-epochs = 4  # Reduced from 550 for better efficiency
-# epochs = 5  # 100
-init_lr = 3e-4  # Optimized learning rate
+batch_size = 8  # Reduced for human pose estimation stability
+dropout_rate = 0.3  # Reduced for better keypoint learning
+stride = 4.0  # Smaller stride for better keypoint localization
+epochs = 10  # Increased for proper human pose learning
+init_lr = 1e-4  # Lower learning rate for stable human keypoint training
 optimizer_name = 'adamw'  # sgd, adam, adamw, rmsprop, sdgard
 # mean_pixel = [123.68, 116.779, 103.939]
 mean_pixel = [0.485, 0.456, 0.406]
