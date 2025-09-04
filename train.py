@@ -206,7 +206,7 @@ if __name__ == '__main__':
     trainSteps = len(train_loader)
     valSteps = len(val_loader)
 
-    # initialize a dictionary to store training history
+    # initialize a dictionary to store training historyanlysis the full code base and explainn it in debuging style and dose the code use pretraind hrnet by default  
     H = {"train_loss": [], "val_loss": []}
 
     # To monitor training loss
