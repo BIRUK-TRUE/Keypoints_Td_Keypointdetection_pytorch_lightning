@@ -73,7 +73,7 @@ max_joints_val = max(img_max_height - 1, img_max_width - 1)
 max_bbox_coords_val = max(615.41, 625.57)
 max_bbox_length = max(img_max_height, img_max_width)
 
-num_workers = 4  # Number of parallel processes for data preparation
+num_workers = 2  # Reduced for Kaggle compatibility
 random_state = 42  # To shuffle images and targets in same order
 threshold = 0.5  # define threshold to filter weak predictions
 

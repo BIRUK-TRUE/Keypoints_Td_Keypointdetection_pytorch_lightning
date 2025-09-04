@@ -464,7 +464,7 @@ class HRNet(Backbone):
         return x
 
     def get_n_channels_out(self):
-        return 32
+        return 17  # Return number of keypoints for human pose detection
 
     @staticmethod
     def add_to_argparse(parent_parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
