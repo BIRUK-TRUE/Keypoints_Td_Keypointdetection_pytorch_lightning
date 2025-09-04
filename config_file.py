@@ -7,7 +7,7 @@ from typing import List, Tuple
 #   <base_path>/annotations/person_keypoints_val2017.json
 #   <base_path>/images/train2017/train217/*.jpg
 #   <base_path>/images/val2017/val2017/*.jpg
-# base_path = '/Datasets/ms_coco'  sampel
+
 base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
 # base_path = '../Datasets/ms_coco'
 
