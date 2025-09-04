@@ -8,8 +8,8 @@ from typing import List, Tuple
 #   <base_path>/images/train2017/train217/*.jpg
 #   <base_path>/images/val2017/val2017/*.jpg
 # base_path = '/Datasets/ms_coco'
-base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
-# base_path = '../Datasets/ms_coco'
+# base_path = '/kaggle/input/key-point-data/dataset/ms_coco'
+base_path = '../Datasets/ms_coco'
 
 dataset_type = 'ms_coco'  # ['ms_coco', 'mpii', 'lsp']
 dataset_category = ['train', 'val']
@@ -38,6 +38,7 @@ bbox_class = ['__background__', 'person']
 num_joints = 17
 model_type = 'HRNet'  # LightHRNet, unet, 'resnet18, resnet34, resnet50, resnet101, resnet152, CustomCNN', 'PretrainedResnet'
 hrnet_pretrained = True  # Set to True to use ImageNet pretrained weights
+hrnet_pretrained_path = "pretrained_weights/hrnet_w32.pth"  # Path to local pretrained weights file
 base_output = "snapshots/"  # define the path to the base output directory
 
 # Light HRNet backbone configuration - Enhanced for better performance
@@ -73,7 +74,7 @@ max_joints_val = max(img_max_height - 1, img_max_width - 1)
 max_bbox_coords_val = max(615.41, 625.57)
 max_bbox_length = max(img_max_height, img_max_width)
 
-num_workers = 2  # Reduced for Kaggle compatibility
+num_workers = 2
 random_state = 42  # To shuffle images and targets in same order
 threshold = 0.5  # define threshold to filter weak predictions
 

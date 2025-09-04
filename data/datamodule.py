@@ -41,7 +41,7 @@ class KeypointsDataModule(pl.LightningDataModule):
     # num_workers: int = 2 privious value
     def __init__(self, keypoint_channel_configuration: list[list[str]], json_dataset_path: str = None,
                  json_val_dataset_path: str = None, json_test_dataset_path=None, val_split_ratio: float = 0.25,
-                 batch_size: int = 16, num_workers: int = 8, augment_train: bool = True, **kwargs, ):
+                 batch_size: int = 16, num_workers: int = 2, augment_train: bool = True, **kwargs, ):
         super().__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -91,11 +91,11 @@ class KeypointsDataModule(pl.LightningDataModule):
                 alb.GaussianBlur(blur_limit=(3, 7), p=0.3),
                 alb.MotionBlur(blur_limit=7, p=0.2),
                 alb.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.3),
-                alb.GaussNoise(var_limit=(10.0, 50.0), p=0.3),  
+                # alb.GaussNoise(var_limit=(10.0, 50.0), p=0.3),  # Disabled for Kaggle compatibility  
                 alb.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.2),
             
             # Simplified dropout for Kaggle compatibility
-            alb.CoarseDropout(max_holes=8, max_height=32, max_width=32, p=0.5),
+            # alb.CoarseDropout(max_holes=8, max_height=32, max_width=32, p=0.5),  # Disabled for Kaggle compatibility
             ])
             if isinstance(self.train_dataset, COCOKeypointsDataset):
                 self.train_dataset.transform = enhanced_transforms

@@ -315,24 +315,109 @@ class HRNet(Backbone):
             self.load_pretrained_weights()
 
     def load_pretrained_weights(self):
-        url = 'https://github.com/HRNet/HRNet-Image-Classification/releases/download/PretrainedWeights/HRNet_W32_C_ssld_pretrained.pth'
+        """Load HRNet pretrained weights from local .pth file"""
+        import config_file as config
+        import os
+        
+        # Get the pretrained weights path from config
+        pretrained_path = getattr(config, 'hrnet_pretrained_path', 'pretrained_weights/hrnet_w32.pth')
+        
+        # Try to load from local file first
+        if os.path.exists(pretrained_path):
+            try:
+                print(f"Loading HRNet pretrained weights from local file: {pretrained_path}")
+                state_dict = torch.load(pretrained_path, map_location='cpu')
+                
+                success = self._load_pretrained_state_dict(state_dict)
+                if success:
+                    print(f"✓ Successfully loaded HRNet pretrained weights from {pretrained_path}")
+                    return
+                    
+            except Exception as e:
+                print(f"✗ Failed to load local pretrained weights: {e}")
+        else:
+            print(f"⚠ Local pretrained weights file not found: {pretrained_path}")
+            print("Please add the HRNet-W32-C .pth file to your codebase at this location.")
+        
+        # Fallback: try downloading if local file not available
+        print("Attempting to download pretrained weights as fallback...")
+        urls = [
+            'https://download.pytorch.org/models/hrnet_w32-36af842e.pth',
+            'https://github.com/HRNet/HRNet-Image-Classification/releases/download/PretrainedWeights/hrnet_w32_sgd_lr5e-2_wd1e-4_bs32_x100.pth'
+        ]
+        
+        for i, url in enumerate(urls):
+            try:
+                print(f"Downloading from source {i+1}/{len(urls)}...")
+                state_dict = torch.hub.load_state_dict_from_url(url, progress=True, map_location='cpu')
+                
+                success = self._load_pretrained_state_dict(state_dict)
+                if success:
+                    print(f"✓ Successfully downloaded and loaded pretrained weights")
+                    return
+                    
+            except Exception as e:
+                print(f"✗ Download method {i+1} failed: {e}")
+                continue
+        
+        print("⚠ All pretrained weight loading methods failed. Using random initialization.")
+        print("For best results, please add hrnet_w32.pth to the pretrained_weights/ directory.")
+    
+    def _download_from_onedrive(self, url):
+        """Download weights from OneDrive with proper error handling"""
+        import requests
+        import tempfile
+        import os
+        
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pth') as tmp_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                tmp_file.write(chunk)
+            tmp_path = tmp_file.name
+        
         try:
-            state_dict = torch.hub.load_state_dict_from_url(url, progress=True)
-            # The pretrained model has a different final layer, so we need to adapt it.
-            # We will load all weights except for the final classifier.
+            state_dict = torch.load(tmp_path, map_location='cpu')
+            return state_dict
+        finally:
+            os.unlink(tmp_path)
+    
+    def _load_pretrained_state_dict(self, state_dict):
+        """Load pretrained state dict with proper filtering"""
+        try:
             model_dict = self.state_dict()
-
-            # Filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.shape == model_dict[k].shape}
-
-            # Overwrite entries in the existing state dict
+            
+            # Filter out incompatible keys (different shapes or final layer)
+            pretrained_dict = {}
+            skipped_keys = []
+            
+            for k, v in state_dict.items():
+                if k in model_dict:
+                    if v.shape == model_dict[k].shape and 'final_layer' not in k and 'classifier' not in k:
+                        pretrained_dict[k] = v
+                    else:
+                        skipped_keys.append(f"{k} (shape mismatch: {v.shape} vs {model_dict[k].shape})")
+                else:
+                    skipped_keys.append(f"{k} (not in model)")
+            
+            if len(pretrained_dict) == 0:
+                print("No compatible pretrained weights found")
+                return False
+            
+            # Update model with pretrained weights
             model_dict.update(pretrained_dict)
-
-            # Load the new state dict
             self.load_state_dict(model_dict)
-            print("Successfully loaded pretrained HRNet weights.")
+            
+            print(f"Loaded {len(pretrained_dict)} pretrained layers")
+            if skipped_keys and len(skipped_keys) < 10:  # Don't spam if too many
+                print(f"Skipped {len(skipped_keys)} incompatible layers")
+            
+            return True
+            
         except Exception as e:
-            print(f"Could not load pretrained weights: {e}")
+            print(f"Error loading state dict: {e}")
+            return False
 
     def _make_transition_layer(
             self, num_channels_pre_layer, num_channels_cur_layer):
