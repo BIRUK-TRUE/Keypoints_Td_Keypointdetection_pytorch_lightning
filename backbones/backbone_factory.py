@@ -29,10 +29,13 @@ class BackboneFactory:
     ]
 
     @staticmethod
-    def create_backbone(backbone_type: str, **kwargs) -> Backbone:
+    def create_backbone(backbone_type: str, confs, **kwargs) -> Backbone:
         for backbone_class in BackboneFactory.registered_backbone_classes:
             if backbone_type == backbone_class.__name__:
-                return backbone_class(**kwargs)
+                if backbone_type == 'HRNet':
+                    return backbone_class(n_channels_in=3, n_channels_out=confs.num_joints, pretrained=confs.hrnet_pretrained, **kwargs)
+                else:
+                    return backbone_class(**kwargs)
         raise Exception("Unknown backbone type")
 
     @staticmethod

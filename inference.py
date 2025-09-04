@@ -6,6 +6,7 @@ from PIL import Image
 from typing import List, Dict, Any, Optional, Tuple
 
 from models.detector import KeypointDetector
+import config_file as confs
 from utils.heatmap import get_keypoints_from_heatmap_batch_maxpool
 from utils.load_checkpoints import get_model_from_wandb_checkpoint
 from utils.visualization import draw_keypoints_on_image
@@ -90,6 +91,9 @@ def run_inference(model: KeypointDetector, image, confidence_threshold: float = 
 
 
 def _predict_keypoints_on_crop(model: KeypointDetector, crop: Image, abs_max_threshold: float = 0.25) -> List[Optional[Tuple[int, int]]]:
+    # Resize crop to training dimensions to avoid HRNet fusion mismatches on odd sizes
+    crop = crop.resize((confs.img_width, confs.img_height), Image.BILINEAR)
+
     tensored_image = torch.from_numpy(np.array(crop)).float()
     tensored_image = tensored_image / 255.0
     # Change HWC -> CHW before normalization

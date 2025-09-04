@@ -175,7 +175,7 @@ if __name__ == '__main__':
             'num_blocks': confs.light_hrnet_blocks
         }
 
-    backbone_model = BackboneFactory.create_backbone(confs.model_type, **backbone_params)
+    backbone_model = BackboneFactory.create_backbone(confs.model_type, confs, **backbone_params)
     print(f"Using {confs.model_type} backbone.")
     my_model = KeypointDetector(heatmap_sigma=6, maximal_gt_keypoint_pixel_distances="2 4", backbone=backbone_model,
                                 minimal_keypoint_extraction_pixel_distance=2, learning_rate=3e-4,

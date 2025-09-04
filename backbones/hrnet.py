@@ -256,7 +256,7 @@ blocks_dict = {
 
 
 class HRNet(Backbone):
-    def __init__(self, n_channels_in=3, n_channels_out=32, **kwargs):
+    def __init__(self, n_channels_in=3, n_channels_out=32, pretrained=False, **kwargs):
         super().__init__()
         self.inplanes = 64
 
@@ -310,6 +310,29 @@ class HRNet(Backbone):
             stride=1,
             padding=0
         )
+
+        if pretrained:
+            self.load_pretrained_weights()
+
+    def load_pretrained_weights(self):
+        url = 'https://github.com/HRNet/HRNet-Image-Classification/releases/download/PretrainedWeights/HRNet_W32_C_ssld_pretrained.pth'
+        try:
+            state_dict = torch.hub.load_state_dict_from_url(url, progress=True)
+            # The pretrained model has a different final layer, so we need to adapt it.
+            # We will load all weights except for the final classifier.
+            model_dict = self.state_dict()
+
+            # Filter out unnecessary keys
+            pretrained_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.shape == model_dict[k].shape}
+
+            # Overwrite entries in the existing state dict
+            model_dict.update(pretrained_dict)
+
+            # Load the new state dict
+            self.load_state_dict(model_dict)
+            print("Successfully loaded pretrained HRNet weights.")
+        except Exception as e:
+            print(f"Could not load pretrained weights: {e}")
 
     def _make_transition_layer(
             self, num_channels_pre_layer, num_channels_cur_layer):

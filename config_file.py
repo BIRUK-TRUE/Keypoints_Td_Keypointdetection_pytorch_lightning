@@ -37,6 +37,7 @@ joints_name = ['nose','left_eye','right_eye','left_ear','right_ear','left_should
 bbox_class = ['__background__', 'person']
 num_joints = 17
 model_type = 'HRNet'  # LightHRNet, unet, 'resnet18, resnet34, resnet50, resnet101, resnet152, CustomCNN', 'PretrainedResnet'
+hrnet_pretrained = True  # Set to True to use ImageNet pretrained weights
 base_output = "snapshots/"  # define the path to the base output directory
 
 # Light HRNet backbone configuration - Enhanced for better performance
